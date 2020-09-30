@@ -1,21 +1,55 @@
 package rac
 
 import (
+	_ "database/sql"
+	"log"
 	"reflect"
 	"strings"
 )
 
+const TagNamespace = "rac"
+
 type object map[string]string
 
+func (o object) Columns() []string {
+
+	var col []string
+
+	for s, _ := range o {
+		col = append(col, s)
+	}
+	return col
+}
+
+func (o object) Scan(ptr map[string]interface{}) error {
+
+	for key, value := range o {
+
+		dest, ok := ptr[key]
+
+		if !ok {
+			continue
+		}
+
+		err := convertAssign(dest, value)
+
+		if err != nil {
+			log.Println("assing err: ", err)
+		}
+	}
+
+	return nil
+}
+
 type decodeState struct {
-	data   []byte
-	fields []object
+	data    []byte
+	objects []object
 }
 
 func (s *decodeState) init(data []byte) {
 
 	s.data = data
-	s.fields = []object{}
+	s.objects = []object{}
 
 }
 
@@ -37,7 +71,7 @@ func (s *decodeState) parse() {
 				continue
 			}
 
-			s.fields = append(s.fields, field)
+			s.objects = append(s.objects, field)
 
 			part = ""
 		}
@@ -51,7 +85,7 @@ func (s *decodeState) parseObject(in string) object {
 	result := make(object)
 
 	for _, line := range strings.Split(in, "\n") {
-		parts := strings.Split(line, ":")
+		parts := strings.Split(line, ": ")
 		if len(parts) == 2 {
 			result[strings.Trim(parts[0], " ")] = strings.Trim(parts[1], " ")
 		}
@@ -60,70 +94,79 @@ func (s *decodeState) parseObject(in string) object {
 	return result
 }
 
-func (s *decodeState) unmarshal(v interface{}) error {
-	rv := reflect.ValueOf(v)
+func (s *decodeState) unmarshal(value interface{}) error {
+	rv := reflect.ValueOf(value)
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
-		return &InvalidUnmarshalError{reflect.TypeOf(v)}
+		return &InvalidUnmarshalError{reflect.TypeOf(value)}
 	}
 
 	s.parse()
 
-	switch rv.Kind() {
+	rType := reflect.TypeOf(value)
+	if _, ok := rType.(reflect.Type); !ok {
+		rType = rType.Elem()
+	}
 
-	case reflect.Slice, reflect.Array:
+	var v reflect.Value
+	//var elemType reflect.Type
 
-	case reflect.Struct:
+	v = rv.Elem()
+
+	isSlice := v.Kind() == reflect.Slice && v.Type().Elem().Kind() != reflect.Uint
+
+	log.Println(isSlice)
+
+	tagStore := newTagStore()
+
+	for _, object := range s.objects {
+
+		column := object.Columns()
+
+		ptr := make(map[string]interface{}, len(column))
+
+		var elem reflect.Value
+
+		if isSlice {
+			elem = reflectAlloc(v.Type().Elem())
+		} else {
+			elem = v
+		}
+
+		err := tagStore.findPtr(elem, column, ptr)
+		if err != nil {
+			return err
+		}
+
+		err = object.Scan(ptr)
+		if err != nil {
+			return err
+		}
+		for i := range ptr {
+			ptr[i] = nil
+		}
+
+		if isSlice {
+			v.Set(reflect.Append(v, elem))
+		}
 
 	}
 
 	return nil
 }
 
+func reflectAlloc(typ reflect.Type) reflect.Value {
+	if typ.Kind() == reflect.Ptr {
+		return reflect.New(typ.Elem())
+	}
+	return reflect.New(typ).Elem()
+}
+
 func Unmarshal(data []byte, v interface{}) error {
 
 	var d decodeState
-	//err := checkValid(data, &d.scan)
-	//if err != nil {
-	//	return err
-	//}
 
 	d.init(data)
 	return d.unmarshal(v)
-}
-
-// tagOptions is the string following a comma in a struct field's "json"
-// tag, or the empty string. It does not include the leading comma.
-type tagOptions string
-
-// parseTag splits a struct field's json tag into its name and
-// comma-separated options.
-func parseTag(tag string) (string, tagOptions) {
-	if idx := strings.Index(tag, ","); idx != -1 {
-		return tag[:idx], tagOptions(tag[idx+1:])
-	}
-	return tag, tagOptions("")
-}
-
-// Contains reports whether a comma-separated list of options
-// contains a particular substr flag. substr must be surrounded by a
-// string boundary or commas.
-func (o tagOptions) Contains(optionName string) bool {
-	if len(o) == 0 {
-		return false
-	}
-	s := string(o)
-	for s != "" {
-		var next string
-		i := strings.Index(s, ",")
-		if i >= 0 {
-			s, next = s[:i], s[i+1:]
-		}
-		if s == optionName {
-			return true
-		}
-		s = next
-	}
-	return false
 }
 
 // An InvalidUnmarshalError describes an invalid argument passed to Unmarshal.

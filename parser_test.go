@@ -1,6 +1,9 @@
 package rac
 
-import "testing"
+import (
+	"log"
+	"testing"
+)
 
 func TestUnmarshal(t *testing.T) {
 
@@ -19,8 +22,14 @@ errors-count-threshold        : 0
 kill-problem-processes        : 0
 `
 
-	var test string
+	var test []Cluster
 
 	_ = Unmarshal([]byte(example), &test)
+
+	var test2 Cluster
+
+	_ = Unmarshal([]byte(example), &test2)
+
+	log.Println(test)
 
 }
