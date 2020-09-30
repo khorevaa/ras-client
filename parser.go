@@ -1,7 +1,6 @@
 package rac
 
 import (
-	_ "database/sql"
 	"log"
 	"reflect"
 	"strings"
@@ -113,8 +112,6 @@ func (s *decodeState) unmarshal(value interface{}) error {
 	v = rv.Elem()
 
 	isSlice := v.Kind() == reflect.Slice && v.Type().Elem().Kind() != reflect.Uint
-
-	log.Println(isSlice)
 
 	tagStore := newTagStore()
 

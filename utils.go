@@ -177,23 +177,6 @@ func convertAssign(dest, src interface{}) error {
 			return nil
 
 		}
-	case time.Time:
-		switch d := dest.(type) {
-		case *time.Time:
-			*d = s
-			return nil
-		case *string:
-			*d = s.Format(time.RFC3339Nano)
-			return nil
-		case *[]byte:
-			if d == nil {
-				return errNilPtr
-			}
-			*d = []byte(s.Format(time.RFC3339Nano))
-			return nil
-
-		}
-
 	}
 
 	var sv reflect.Value
@@ -385,13 +368,13 @@ func convertBoolValue(src interface{}) (*bool, error) {
 	case bool:
 		return &s, nil
 	case string:
-		b, err := strconv.ParseBool(s)
+		b, err := parseBool(s)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't convert %q into type bool", s)
 		}
 		return &b, nil
 	case []byte:
-		b, err := strconv.ParseBool(string(s))
+		b, err := parseBool(string(s))
 		if err != nil {
 			return nil, fmt.Errorf("couldn't convert %q into type bool", s)
 		}
@@ -447,4 +430,17 @@ func parseDate(s string) (time.Time, error) {
 
 	t, err := time.Parse(layout, s)
 	return t, err
+}
+
+// parseBool returns the boolean value represented by the string.
+// It accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False.
+// Any other value returns an error.
+func parseBool(str string) (bool, error) {
+	switch str {
+	case "1", "t", "T", "true", "TRUE", "True", "yes", "Yes", "YES", "on", "On", "ON":
+		return true, nil
+	case "0", "f", "F", "false", "FALSE", "False", "no", "No", "NO", "off", "Off", "OFF":
+		return false, nil
+	}
+	return false, strconv.ErrSyntax
 }

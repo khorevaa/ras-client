@@ -18,25 +18,25 @@ app-id                           : Designer
 locale                           : ru_RU
 started-at                       : 2018-04-09T14:51:31
 last-active-at                   : 2018-05-14T11:12:33
-hibernate                        : no
+hibernate                        : yes
 passive-session-hibernate-time   : 1200
 hibernate-session-terminate-time : 86400
 blocked-by-dbms                  : 0
 blocked-by-ls                    : 0
 bytes-all                        : 105972550
-bytes-last-5min                  : 0
+bytes-last-5min                  : 1000000
 calls-all                        : 119052
 calls-last-5min                  : 0
 dbms-bytes-all                   : 317824922
 dbms-bytes-last-5min             : 0
 db-proc-info                     : 
 db-proc-took                     : 0
-db-proc-took-at                  : 
+db-proc-took-at                  : 2018-05-14T11:12:33
 duration-all                     : 66184
 duration-all-dbms                : 43242
 duration-current                 : 0
 duration-current-dbms            : 0
-duration-last-5min               : 0
+duration-last-5min               : 5213
 duration-last-5min-dbms          : 0
 `
 
