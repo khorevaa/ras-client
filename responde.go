@@ -77,7 +77,7 @@ type ConnectionInfo struct {
 
 }
 
-func (i ConnectionInfo) Sig() (string, string, string) {
+func (i ConnectionInfo) ConnectionSig() (string, string, string) {
 	return i.UUID, i.Process, i.Infobase
 }
 

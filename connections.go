@@ -1,56 +1,61 @@
 package rac
 
+import "errors"
+
+type ConnectionsCommandType string
+
+func (c ConnectionsCommandType) Check(params map[string]string) error {
+
+	var err error
+
+	if val, ok := params["--cluster"]; !ok || len(val) == 0 {
+		return errors.New("cluster must be identified")
+	}
+
+	switch c {
+	case ConnectionsInfoCommand, ConnectionsDisconnectCommand:
+
+		if val, ok := params["--connection"]; !ok || len(val) == 0 {
+			err = errors.New("connection uuid must be identified")
+		}
+
+	}
+
+	return err
+}
+
+func (c ConnectionsCommandType) Command() string {
+	return string(c)
+}
+
 const (
-	ConnectionsCommand           = "connection"
-	ConnectionsListCommand       = ConnectionsCommand + " list"
-	ConnectionsInfoCommand       = ConnectionsCommand + " info"
-	ConnectionsDisconnectCommand = ConnectionsCommand + " disconnect"
+	baseConnectionsCommand       ConnectionsCommandType = "connection"
+	ConnectionsListCommand                              = baseConnectionsCommand + " list"
+	ConnectionsInfoCommand                              = baseConnectionsCommand + " info"
+	ConnectionsDisconnectCommand                        = baseConnectionsCommand + " disconnect"
 )
 
-type InfobaseSig interface {
-	Sig() (uuid string, auth AuthSig)
-}
-
-type AuthSig interface {
-	Sig() (usr string, pwd string)
-}
-
-type ConnectionSig interface {
-	Sig() (string, string, string)
-}
-
-type ConnectionSigFilter interface {
-	Filter() (process string, infobase InfobaseSig, filterFunc func(info ConnectionInfo) bool)
-}
+type ConnectionFilterFunc func(info ConnectionInfo) bool
 
 type ConnectionsList struct {
 	Process    string
-	Infobase   InfobaseSig
-	FilterFunc func(info ConnectionInfo) bool
+	Infobase   string
+	Auth       Auth
+	FilterFunc ConnectionFilterFunc
 }
 
-func (_ ConnectionsList) Command() string {
+func (_ ConnectionsList) Command() DoCommand {
 	return ConnectionsListCommand
 }
 
 func (i ConnectionsList) Values() map[string]string {
 
-	var (
-		ib, usr, pwd string
-		auth         AuthSig
-	)
-
-	if i.Infobase != nil {
-		ib, auth = i.Infobase.Sig()
-		if auth != nil {
-			usr, pwd = auth.Sig()
-		}
-	}
+	user, pwd := i.Auth.Sig()
 
 	return map[string]string{
 		"--process":       i.Process,
-		"--infobase":      ib,
-		"--infobase-user": usr,
+		"--infobase":      i.Infobase,
+		"--infobase-user": user,
 		"--infobase-pwd":  pwd,
 	}
 
@@ -66,11 +71,12 @@ func (i ConnectionsList) Parse(res *RawRespond) error {
 
 	err := Unmarshal(res.raw, &list)
 	res.Error = err
-	res.parsedRespond = list
 
 	if i.FilterFunc != nil {
-
+		list = i.filter(list)
 	}
+
+	res.parsedRespond = list
 
 	return err
 
@@ -93,6 +99,20 @@ func (i ConnectionsList) filter(list []ConnectionInfo) []ConnectionInfo {
 	}
 
 	return filtered
+
+}
+
+func (i *ConnectionsList) extractOptions(props []interface{}) {
+
+	for _, prop := range props {
+
+		switch opt := prop.(type) {
+		case ConnectionFilterFunc:
+			i.FilterFunc = opt
+		default:
+			continue
+		}
+	}
 
 }
 
@@ -122,7 +142,7 @@ func (i ConnectionsInfo) Parse(res *RawRespond) error {
 	return err
 }
 
-func (_ ConnectionsInfo) Command() string {
+func (_ ConnectionsInfo) Command() DoCommand {
 	return ConnectionsInfoCommand
 }
 
@@ -130,21 +150,22 @@ type ConnectionsDisconnect struct {
 	UUID     string
 	Process  string
 	Infobase string
-	Auth
+	Auth     Auth
 }
 
-func (_ ConnectionsDisconnect) Command() string {
+func (_ ConnectionsDisconnect) Command() DoCommand {
 	return ConnectionsDisconnectCommand
 }
 
 func (i ConnectionsDisconnect) Values() map[string]string {
+	user, pwd := i.Auth.Sig()
 
 	return map[string]string{
 		"--connection":    i.UUID,
 		"--process":       i.Process,
 		"--infobase":      i.Infobase,
-		"--infobase-user": i.User,
-		"--infobase-pwd":  i.Pwd,
+		"--infobase-user": user,
+		"--infobase-pwd":  pwd,
 	}
 
 }
@@ -164,43 +185,21 @@ type ConnectionsRespond struct {
 	Info ConnectionInfo
 }
 
-func (m *Manager) Connections(cluster Clusterable, what interface{}, opts ...interface{}) (ConnectionsRespond, error) {
+func (m *Manager) Connections(what interface{}, opts ...interface{}) (respond ConnectionsRespond, err error) {
 
-	var (
-		method  string
-		params  = make(map[string]string)
-		parser  RespondParser
-		respond ConnectionsRespond
-	)
+	val, ok := what.(Valued)
 
-	switch v := what.(type) {
-	case valued:
-
-		method = v.Command()
-		params = v.Values()
-		parser = v.(RespondParser)
-
-	default:
+	if !ok {
 		return respond, ErrUnsupportedWhat
 	}
 
-	doOptions := extractOptions(opts)
-
-	raw := m.do(method, params, clusterSigParams(cluster.ClusterSig()), doOptions.Values())
-
-	if raw.Error != nil {
-		return respond, raw.Error
-	}
-
-	err := parser.Parse(raw)
+	respond.RawRespond, err = m.Do(val, opts...)
 
 	if err != nil {
-		return respond, ErrUnsupportedWhat
+		return respond, err
 	}
 
-	respond.RawRespond = raw
-
-	switch v := raw.parsedRespond.(type) {
+	switch v := respond.parsedRespond.(type) {
 
 	case ConnectionInfo:
 		respond.Info = v
@@ -213,29 +212,42 @@ func (m *Manager) Connections(cluster Clusterable, what interface{}, opts ...int
 
 }
 
-func (m *Manager) DisconnectConnection(cluster Clusterable, what ConnectionSig, opts ...interface{}) (ConnectionsRespond, error) {
+func (m *Manager) DisconnectConnection(what ConnectionSig, opts ...interface{}) (ConnectionsRespond, error) {
+
+	if what == nil {
+		return ConnectionsRespond{}, errors.New("connection sig is nil")
+	}
 
 	do := ConnectionsDisconnect{}
-	do.UUID, do.Process, do.Infobase = what.Sig()
+	do.UUID, do.Process, do.Infobase = what.ConnectionSig()
 
-	return m.Connections(cluster, what, opts)
+	return m.Connections(what, opts...)
 
 }
 
-func (m *Manager) ConnectionInfo(cluster Clusterable, what ConnectionSig, opts ...interface{}) (ConnectionsRespond, error) {
+func (m *Manager) ConnectionInfo(what ConnectionSig, opts ...interface{}) (ConnectionsRespond, error) {
+
+	if what == nil {
+		return ConnectionsRespond{}, errors.New("connection sig is nil")
+	}
 
 	do := ConnectionsInfo{}
-	do.UUID, _, _ = what.Sig()
+	do.UUID, _, _ = what.ConnectionSig()
 
-	return m.Connections(cluster, what, opts)
+	return m.Connections(what, opts...)
 
 }
 
-func (m *Manager) ConnectionList(cluster Clusterable, filter ConnectionSigFilter, opts ...interface{}) (ConnectionsRespond, error) {
+func (m *Manager) ConnectionsList(what ConnectionsSig, opts ...interface{}) (ConnectionsRespond, error) {
 
-	do := ConnectionsList{}
-	do.Process, do.Infobase, do.FilterFunc = filter.Filter()
+	do := &ConnectionsList{}
 
-	return m.Connections(cluster, do, opts)
+	if what != nil {
+		do.Process, do.Infobase, do.Auth = what.ConnectionsSig()
+	}
+
+	do.extractOptions(opts)
+
+	return m.Connections(*do, opts...)
 
 }

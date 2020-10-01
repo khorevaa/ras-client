@@ -39,14 +39,7 @@ func (s *connectionsTestSuite) TestConnectionsList() {
 
 	m, _ := NewManager("srv-uk-app22:1545", WithNoUpdate(), WithPath("C:\\Program Files\\1cv8\\8.3.17.1549\\bin\\rac.exe"))
 
-	var cluster Clusterable
-	for _, info := range m.idxCluster {
-
-		cluster = info
-		break
-	}
-
-	resp, err := m.Connections(cluster, ConnectionsList{})
+	resp, err := m.ConnectionList(nil)
 	s.r().NoError(err)
 	s.r().True(len(resp.List) > 0, "len must be 1")
 

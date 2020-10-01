@@ -1,18 +1,49 @@
 package rac
 
+import "errors"
+
+type ClustersCommandType string
+
+func (c ClustersCommandType) Check(params map[string]string) error {
+
+	var err error
+
+	switch c {
+
+	case ClustersInfoCommand:
+
+		if val, ok := params["--cluster"]; !ok || len(val) == 0 {
+			err = errors.New("cluster must be identified")
+		}
+
+	case ClustersRemoveCommand, ClustersUpdateCommand:
+
+		if val, ok := params["--cluster"]; !ok || len(val) == 0 {
+			err = errors.New("cluster must be identified")
+		}
+
+	}
+
+	return err
+}
+
+func (c ClustersCommandType) Command() string {
+	return string(c)
+}
+
 const (
-	ClustersCommand       = "cluster"
-	ClustersListCommand   = ClustersCommand + " list"
-	ClustersInfoCommand   = ClustersCommand + " info"
-	ClustersInsertCommand = ClustersCommand + " insert"
-	ClustersRemoveCommand = ClustersCommand + " remove"
-	ClustersUpdateCommand = ClustersCommand + " update"
+	baseClustersCommand   ClustersCommandType = "cluster"
+	ClustersListCommand                       = baseClustersCommand + " list"
+	ClustersInfoCommand                       = baseClustersCommand + " info"
+	ClustersInsertCommand                     = baseClustersCommand + " insert"
+	ClustersRemoveCommand                     = baseClustersCommand + " remove"
+	ClustersUpdateCommand                     = baseClustersCommand + " update"
 )
 
 type ClustersList struct {
 }
 
-func (_ ClustersList) Command() string {
+func (_ ClustersList) Command() DoCommand {
 	return ClustersListCommand
 }
 
@@ -63,7 +94,7 @@ func (i ClustersInfo) Parse(res *RawRespond) error {
 	return err
 }
 
-func (_ ClustersInfo) Command() string {
+func (_ ClustersInfo) Command() DoCommand {
 	return ClustersInfoCommand
 }
 
@@ -72,7 +103,7 @@ type ClustersUpdate struct {
 	Auth
 }
 
-func (_ ClustersUpdate) Command() string {
+func (_ ClustersUpdate) Command() DoCommand {
 	return ClustersUpdateCommand
 }
 
@@ -100,7 +131,7 @@ type ClustersInsert struct {
 	Auth
 }
 
-func (_ ClustersInsert) Command() string {
+func (_ ClustersInsert) Command() DoCommand {
 	return ClustersInsertCommand
 }
 
@@ -128,7 +159,7 @@ type ClustersRemove struct {
 	Auth
 }
 
-func (_ ClustersRemove) Command() string {
+func (_ ClustersRemove) Command() DoCommand {
 	return ClustersRemoveCommand
 }
 
@@ -157,43 +188,21 @@ type ClustersRespond struct {
 	Info ClusterInfo
 }
 
-func (m *Manager) Clusters(what interface{}, opts ...interface{}) (ClustersRespond, error) {
+func (m *Manager) Clusters(what interface{}, opts ...interface{}) (respond ClustersRespond, err error) {
 
-	var (
-		method  string
-		params  = make(map[string]string)
-		parser  RespondParser
-		respond ClustersRespond
-	)
+	val, ok := what.(Valued)
 
-	switch v := what.(type) {
-	case valued:
-
-		method = v.Command()
-		params = v.Values()
-		parser = v.(RespondParser)
-
-	default:
+	if !ok {
 		return respond, ErrUnsupportedWhat
 	}
 
-	doOptions := extractOptions(opts)
-
-	raw := m.do(method, params, doOptions.Values())
-
-	if raw.Error != nil {
-		return respond, raw.Error
-	}
-
-	err := parser.Parse(raw)
+	respond.RawRespond, err = m.Do(val, opts...)
 
 	if err != nil {
-		return respond, ErrUnsupportedWhat
+		return respond, err
 	}
 
-	respond.RawRespond = raw
-
-	switch v := raw.parsedRespond.(type) {
+	switch v := respond.parsedRespond.(type) {
 
 	case ClusterInfo:
 		respond.Info = v

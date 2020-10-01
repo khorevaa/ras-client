@@ -14,7 +14,7 @@ type Options struct {
 	timeout           time.Duration
 	ctx               context.Context
 	autoSetDefCluster bool
-	clusterAuth       clusterAuth
+	clusterAuth       Auth
 }
 
 type DoOption func(o *DoOptions)
@@ -123,9 +123,9 @@ func WithClusterAuth(user, pwd string) Option {
 			return
 		}
 
-		o.clusterAuth = clusterAuth{
-			User:     user,
-			Password: pwd,
+		o.clusterAuth = Auth{
+			User: user,
+			Pwd:  pwd,
 		}
 	}
 

@@ -13,46 +13,13 @@ import (
 
 const defaultTimeout = 15 * time.Second
 
-type clusterAuth struct {
-	User     string
-	Password string
-}
-
-func (auth clusterAuth) Args() []string {
-
-	if len(auth.User) == 0 {
-		return []string{}
-	}
-
-	args := []string{
-		"--cluster-user=" + auth.User,
-	}
-
-	if len(auth.Password) > 0 {
-		args = append(args, "--cluster-pwd="+auth.Password)
-	}
-
-	return args
-
-}
-
-type Logger interface {
-	Errorf(msg string, args ...interface{})
-}
-
-type nullLogger struct{}
-
-func (n nullLogger) Errorf(msg string, args ...interface{}) {}
-
-var _ Logger = (*nullLogger)(nil)
-
 type Manager struct {
 	Host    string
 	Port    string
 	options *Options
 
 	defCluster     ClusterInfo
-	defClusterAuth AuthSig
+	defClusterAuth Auth
 
 	idxServers map[string]ServerInfo
 	idxCluster map[string]ClusterInfo
@@ -65,32 +32,29 @@ type Manager struct {
 	log Logger
 }
 
-func (m *Manager) ClusterSig() (string, string, string) {
+func (m *Manager) ClusterAuth() (user string, pwd string) {
 
-	if len(m.defCluster.UUID) == 0 {
-		return "", "", ""
-	}
-
-	var (
-		user, pwd string
-	)
-
-	if m.defClusterAuth != nil {
-		user, pwd = m.defClusterAuth.Sig()
-	}
-
-	return m.defCluster.UUID, user, pwd
+	return m.defClusterAuth.Sig()
 }
 
-func (m *Manager) GetDefCluster() (ClusterInfo, AuthSig) {
+func (m *Manager) ClusterSig() string {
+
+	if len(m.defCluster.UUID) == 0 {
+		return ""
+	}
+
+	return m.defCluster.UUID
+}
+
+func (m *Manager) GetDefCluster() (ClusterInfo, Auth) {
 
 	return m.defCluster, m.defClusterAuth
 
 }
 
-func (m *Manager) SetCluster(cluster Clusterable) error {
+func (m *Manager) SetDefCluster(cluster ClusterSig, auth AuthSig) error {
 
-	uuid, user, pwd := cluster.ClusterSig()
+	uuid := cluster.ClusterSig()
 
 	resp, err := m.Clusters(ClustersInfo{UUID: uuid})
 
@@ -100,8 +64,14 @@ func (m *Manager) SetCluster(cluster Clusterable) error {
 
 	m.defCluster = resp.Info
 
-	if len(user) > 0 {
-		m.defClusterAuth = Auth{user, pwd}
+	if auth != nil {
+
+		user, pwd := auth.Auth()
+
+		m.defClusterAuth = Auth{
+			User: user,
+			Pwd:  pwd,
+		}
 	}
 
 	return nil
@@ -130,7 +100,7 @@ func NewManager(hostPort string, opts ...Option) (*Manager, error) {
 		log:     &nullLogger{},
 		defClusterAuth: Auth{
 			User: options.clusterAuth.User,
-			Pwd:  options.clusterAuth.Password,
+			Pwd:  options.clusterAuth.Pwd,
 		},
 		updateInterval: options.updateInterval,
 		idxCluster:     make(map[string]ClusterInfo),
@@ -181,16 +151,6 @@ func (m *Manager) process() {
 
 }
 
-func clusterSigParams(cluster, user, pwd string) map[string]string {
-
-	return map[string]string{
-		"--cluster":      cluster,
-		"--cluster-user": user,
-		"--cluster-pwd":  pwd,
-	}
-
-}
-
 func (m *Manager) updateCluster() error {
 
 	resp, err := m.Clusters(ClustersList{})
@@ -210,17 +170,52 @@ func (m *Manager) updateCluster() error {
 
 }
 
-func (m *Manager) do(command string, setParams ...map[string]string) *RawRespond {
+func (m *Manager) Do(what Valued, opts ...interface{}) (*RawRespond, error) {
+
+	command := what.Command()
+	params := what.Values()
+
+	doOptions := extractOptions(opts)
+	paramsOpts := extractParams(opts)
+
+	raw := m.do(command, paramsOpts, params, doOptions.Values())
+
+	if raw.Error != nil {
+		return raw, raw.Error
+	}
+
+	err := what.Parse(raw)
+	if err != nil {
+		return raw, err
+	}
+
+	return raw, nil
+
+}
+
+func (m *Manager) do(command DoCommand, setParams ...map[string]string) *RawRespond {
 
 	var args []string
 
-	args = append(args, strings.Fields(command)...)
-
 	params := mergeParams(setParams...)
+	if err := command.Check(params); err != nil {
+		return newRawRespond(nil, err)
+	}
+
+	args = append(args, strings.Fields(command.Command())...)
 
 	for key, value := range params {
 
-		args = append(args, fmt.Sprintf("%s=%s", key, value))
+		switch key {
+		case "--licenses": // TODO Заглушка для булевных значений, которые подставляется без значения
+			v, _ := parseBool(value)
+			if v {
+				args = append(args, key)
+			}
+
+		default:
+			args = append(args, fmt.Sprintf("%s=%s", key, value))
+		}
 
 	}
 
