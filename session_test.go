@@ -37,15 +37,14 @@ duration-all-dbms                : 43242
 duration-current                 : 0
 duration-current-dbms            : 0
 duration-last-5min               : 5213
-duration-last-5min-dbms          : 0
-`
+duration-last-5min-dbms          : 0`
 
-	var test []Session
+	var test []SessionInfo
 
 	_ = Unmarshal([]byte(data), &test)
 
 	log.Println(test)
-	var test2 Session
+	var test2 SessionInfo
 
 	_ = Unmarshal([]byte(data), &test2)
 

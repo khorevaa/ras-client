@@ -29,12 +29,12 @@ avg-server-call-time : -0.265
 avg-threads          : 0.281
 `
 
-	var test []Process
+	var test []ProcessInfo
 
 	_ = Unmarshal([]byte(data), &test)
 
 	log.Println(test)
-	var test2 Process
+	var test2 ProcessInfo
 
 	_ = Unmarshal([]byte(data), &test2)
 

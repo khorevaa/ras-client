@@ -54,8 +54,7 @@ func (s *decodeState) init(data []byte) {
 
 func (s *decodeState) parse() {
 
-	parts := strings.Split(string(s.data), "\n")
-	//parts = strings.Split(parts, "\n")
+	parts := strings.Split(string(s.data), "\r\n")
 
 	part := ""
 	for _, str := range parts {
@@ -64,15 +63,25 @@ func (s *decodeState) parse() {
 
 		if len(str) == 0 {
 
-			field := s.parseObject(part)
+			parseObject := s.parseObject(part)
 
-			if len(part) == 0 {
+			if len(parseObject) == 0 {
 				continue
 			}
 
-			s.objects = append(s.objects, field)
+			s.objects = append(s.objects, parseObject)
 
 			part = ""
+		}
+
+	}
+
+	if len(part) > 0 {
+
+		parseObject := s.parseObject(part)
+
+		if len(parseObject) > 0 {
+			s.objects = append(s.objects, parseObject)
 		}
 
 	}
@@ -82,9 +91,10 @@ func (s *decodeState) parse() {
 func (s *decodeState) parseObject(in string) object {
 
 	result := make(object)
+	in = strings.ReplaceAll(in, "\r", "")
 
 	for _, line := range strings.Split(in, "\n") {
-		parts := strings.Split(line, ": ")
+		parts := strings.Split(line, ": ") // TODO Сделать только разделение по первому символу
 		if len(parts) == 2 {
 			result[strings.Trim(parts[0], " ")] = strings.Trim(parts[1], " ")
 		}
@@ -151,13 +161,6 @@ func (s *decodeState) unmarshal(value interface{}) error {
 	return nil
 }
 
-func reflectAlloc(typ reflect.Type) reflect.Value {
-	if typ.Kind() == reflect.Ptr {
-		return reflect.New(typ.Elem())
-	}
-	return reflect.New(typ).Elem()
-}
-
 func Unmarshal(data []byte, v interface{}) error {
 
 	var d decodeState
@@ -181,4 +184,11 @@ func (e *InvalidUnmarshalError) Error() string {
 		return "rac: Unmarshal(non-pointer " + e.Type.String() + ")"
 	}
 	return "rac: Unmarshal(nil " + e.Type.String() + ")"
+}
+
+func reflectAlloc(typ reflect.Type) reflect.Value {
+	if typ.Kind() == reflect.Ptr {
+		return reflect.New(typ.Elem())
+	}
+	return reflect.New(typ).Elem()
 }

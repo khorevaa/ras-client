@@ -22,11 +22,11 @@ errors-count-threshold        : 0
 kill-problem-processes        : 0
 `
 
-	var test []Cluster
+	var test []ClusterInfo
 
 	_ = Unmarshal([]byte(example), &test)
 
-	var test2 Cluster
+	var test2 ClusterInfo
 
 	_ = Unmarshal([]byte(example), &test2)
 
