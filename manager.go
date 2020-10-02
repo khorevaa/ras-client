@@ -1,22 +1,25 @@
 package rac
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
+	"github.com/v8platform/find"
 	"net"
-	"os/exec"
 	"strings"
 	"time"
 )
 
 const defaultTimeout = 15 * time.Second
 
+type Runner interface {
+	RunCtx(ctx context.Context, command string, args []string) (respond []byte, err error)
+}
+
 type Manager struct {
-	Host    string
-	Port    string
-	options *Options
+	Host string
+	Port string
+
+	options *ManagerOptions
 
 	defCluster     ClusterInfo
 	defClusterAuth Auth
@@ -29,7 +32,9 @@ type Manager struct {
 	updateInterval  time.Duration
 	lastUpdateError error
 
-	log Logger
+	runner  Runner
+	log     Logger
+	racPath string
 }
 
 func (m *Manager) ClusterAuth() (user string, pwd string) {
@@ -78,33 +83,37 @@ func (m *Manager) SetDefCluster(cluster ClusterSig, auth AuthSig) error {
 
 }
 
-func NewManager(hostPort string, opts ...Option) (*Manager, error) {
+func newManager(hostPort string, options *ManagerOptions) (*Manager, error) {
 
 	host, port, _ := net.SplitHostPort(hostPort)
 
-	options := &Options{
-		v8Version:         "8.3",
-		updateInterval:    time.Hour,
-		timeout:           defaultTimeout,
-		autoSetDefCluster: true,
-	}
-
-	for _, opt := range opts {
-		opt(options)
+	if options == nil {
+		options = &ManagerOptions{
+			V8Version:      "8.3",
+			UpdateInterval: time.Hour,
+			Timeout:        defaultTimeout,
+			DetectCluster:  true,
+			ClusterAuth: struct {
+				User string
+				Pwd  string
+			}{User: "", Pwd: ""},
+			Logger: nullLogger{},
+		}
 	}
 
 	manager := &Manager{
 		Host:    host,
 		Port:    port,
 		options: options,
-		log:     &nullLogger{},
+		log:     options.Logger,
 		defClusterAuth: Auth{
-			User: options.clusterAuth.User,
-			Pwd:  options.clusterAuth.Pwd,
+			User: options.ClusterAuth.User,
+			Pwd:  options.ClusterAuth.Pwd,
 		},
-		updateInterval: options.updateInterval,
+		updateInterval: options.UpdateInterval,
 		idxCluster:     make(map[string]ClusterInfo),
 		idxServers:     make(map[string]ServerInfo),
+		runner:         options.Runner,
 	}
 
 	err := manager.init()
@@ -113,7 +122,46 @@ func NewManager(hostPort string, opts ...Option) (*Manager, error) {
 
 }
 
+func extractManagerOptions(opts []interface{}) *ManagerOptions {
+
+	var options *ManagerOptions
+
+	for _, opt := range opts {
+
+		switch o := opt.(type) {
+		case *ManagerOptions:
+			options = o
+		case ManagerOptions:
+			options = &o
+		}
+
+	}
+
+	return options
+
+}
+
+func NewManager(hostPort string, opts ...interface{}) (*Manager, error) {
+
+	options := extractManagerOptions(opts)
+
+	return newManager(hostPort, options)
+
+}
+
 func (m *Manager) init() error {
+
+	if m.runner == nil {
+		m.runner = initDefaultRunner(m.options)
+	}
+
+	if len(m.racPath) == 0 {
+		var err error
+		m.racPath, err = find.RAC(find.WithVersion(m.options.V8Version))
+		if err != nil {
+			return err
+		}
+	}
 
 	err := m.updateCluster()
 
@@ -129,9 +177,18 @@ func (m *Manager) init() error {
 
 }
 
+func initDefaultRunner(options *ManagerOptions) Runner {
+
+	return &runner{
+		Timeout:         options.Timeout,
+		TryTimeoutCount: options.TryTimeoutCount,
+	}
+
+}
+
 func (m *Manager) detectDefCluster() {
 
-	if m.options.autoSetDefCluster {
+	if m.options.DetectCluster {
 
 		var cluster ClusterInfo
 		for _, info := range m.idxCluster {
@@ -172,19 +229,29 @@ func (m *Manager) updateCluster() error {
 
 func (m *Manager) Do(what Valued, opts ...interface{}) (*RawRespond, error) {
 
+	return m.DoCtx(context.Background(), what, opts...)
+
+}
+
+func (m *Manager) DoCtx(ctx context.Context, what Valued, opts ...interface{}) (respond *RawRespond, err error) {
+
 	command := what.Command()
 	params := what.Values()
 
 	doOptions := extractOptions(opts)
+	err = doOptions.Options(opts...)
+	if err != nil {
+		return nil, err
+	}
 	paramsOpts := extractParams(opts)
-
-	raw := m.do(command, paramsOpts, params, doOptions.Values())
+	mParams := m.embedParams()
+	raw := m.doCtx(ctx, command, paramsOpts, params, mParams, doOptions.Values())
 
 	if raw.Error != nil {
 		return raw, raw.Error
 	}
 
-	err := what.Parse(raw)
+	err = what.Parse(raw)
 	if err != nil {
 		return raw, err
 	}
@@ -193,7 +260,7 @@ func (m *Manager) Do(what Valued, opts ...interface{}) (*RawRespond, error) {
 
 }
 
-func (m *Manager) do(command DoCommand, setParams ...map[string]string) *RawRespond {
+func (m *Manager) doCtx(ctx context.Context, command DoCommand, setParams ...map[string]string) *RawRespond {
 
 	var args []string
 
@@ -207,7 +274,7 @@ func (m *Manager) do(command DoCommand, setParams ...map[string]string) *RawResp
 	for key, value := range params {
 
 		switch key {
-		case "--licenses": // TODO Заглушка для булевных значений, которые подставляется без значения
+		case "--licenses", "--drop-database", "--clear-database": // TODO Заглушка для булевных значений, которые подставляется без значения
 			v, _ := parseBool(value)
 			if v {
 				args = append(args, key)
@@ -219,7 +286,11 @@ func (m *Manager) do(command DoCommand, setParams ...map[string]string) *RawResp
 
 	}
 
-	raw, err := m.run(args...)
+	rac := m.racPath
+
+	args = append(args, m.ServerSig())
+
+	raw, err := m.runner.RunCtx(ctx, rac, args)
 
 	res := newRawRespond(raw, err)
 
@@ -244,80 +315,6 @@ func mergeParams(params ...map[string]string) map[string]string {
 	}
 
 	return merged
-}
-
-func (m *Manager) run(args ...string) ([]byte, error) {
-
-	var (
-		ctx     context.Context
-		respond []byte
-	)
-
-	ctx = context.Background()
-
-	if m.options.ctx != nil {
-		ctx = m.options.ctx
-	}
-
-	if m.options.timeout > 0 {
-
-		ctx, _ = context.WithTimeout(ctx, defaultTimeout)
-	}
-
-	rac := m.options.racPath // TODO Полечнеие по версии 1С
-
-	args = append(args, m.ServerSig())
-
-	cmd := exec.CommandContext(ctx, rac, args...)
-
-	cmd.Stdout = new(bytes.Buffer)
-	cmd.Stderr = new(bytes.Buffer)
-	errch := make(chan error, 1)
-
-	err := cmd.Start()
-	if err != nil {
-		return respond, fmt.Errorf("Произошла ошибка запуска:\n\terr:%v\n\tПараметры: %v\n\t", err.Error(), cmd.Args)
-	}
-
-	// запускаем в горутине т.к. наблюдалось что при выполнении RAC может происходить зависон, нам нужен таймаут
-	go func() {
-		errch <- cmd.Wait()
-	}()
-
-	select {
-	case <-ctx.Done(): // timeout
-
-		if ctx.Err() == context.DeadlineExceeded {
-			m.log.Errorf("Выполнение команды прервано по таймауту\n\tПараметры: %v\n\t", cmd.Args)
-		}
-
-		return respond, ctx.Err()
-
-	case err := <-errch:
-		if err != nil {
-
-			stderr := cmd.Stderr.(*bytes.Buffer).String()
-			errText := fmt.Sprintf("Произошла ошибка запуска:\n\terr:%v\n\tПараметры: %v\n\t", err.Error(), cmd.Args)
-			if stderr != "" {
-				errText += fmt.Sprintf("StdErr:%v\n", stderr)
-			}
-
-			return respond, errors.New(errText)
-
-		} else {
-
-			in := cmd.Stdout.(*bytes.Buffer).Bytes()
-
-			respond, err = decodeOutBytes(in)
-
-			if err != nil {
-				return respond, err
-			}
-
-			return respond, nil
-		}
-	}
-
 }
 
 func (m *Manager) ServerSig() string {

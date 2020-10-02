@@ -1,0 +1,3 @@
+¼î{sÀÍ7{E-X"@ÖÀ¨±À¨9	Ê¿îÏ¬¿69P?
+v8.service.Admin.Cluster10.0swp.Endpoint.ÐÑÐ¸Ð±ÐºÐ° ÑÐ¾ÑÐºÐ¸ Ð¿Ð¾Ð´ÐºÐ»ÑÑÐµÐ½Ð¸Ñv8.service.UnsupportedServiceGÐ¡ÐµÑÐ²Ð¸Ñ Ð½Ðµ Ð¿Ð¾Ð´Ð´ÐµÑÐ¶Ð¸Ð²Ð°ÐµÑÑÑ
+[name='v8.service.Admin.Cluster', version='10.0', supported=9.0,8.0,7.0,6.0,5.0,4.0,3.0]

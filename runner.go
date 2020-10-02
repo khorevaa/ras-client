@@ -1,188 +1,92 @@
 package rac
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"fmt"
+	"os/exec"
+	"time"
 )
 
-type DoCommand interface {
-	Check(params map[string]string) error
-	Command() string
+type runner struct {
+	Timeout         time.Duration
+	TryTimeoutCount int
 }
 
-type CommonCommandType string
+func (r *runner) RunCtx(ctx context.Context, command string, args []string) (respond []byte, err error) {
 
-func (_ CommonCommandType) Check(_ map[string]string) error {
-	return nil
-}
-func (c CommonCommandType) Command() string {
-	return string(c)
-}
+	respond, err = r.runTry(ctx, command, args)
 
-var ErrUnsupportedWhat = errors.New("unsupported what argument")
+	if err == context.DeadlineExceeded {
 
-type ConnectionSig interface {
-	ConnectionSig() (uuid string, process string, infobase string)
-}
+		for tryCount := 1; tryCount < r.TryTimeoutCount; tryCount++ {
 
-type ConnectionsSig interface {
-	ConnectionsSig() (process string, infobase string, auth Auth)
-}
-type InfobaseSig interface {
-	InfobaseSig() (uuid string)
-}
+			respond, err = r.runTry(ctx, command, args)
 
-type InfobaseAuth interface {
-	InfobaseAuth() (usr string, pwd string)
-}
+			if err == context.DeadlineExceeded {
+				continue
+			}
 
-type ClusterSig interface {
-	ClusterSig() (uuid string)
-}
+			return
 
-type ClusterAuth interface {
-	ClusterAuth() (user string, pwd string)
-}
+		}
 
-type AuthSig interface {
-	Auth() (user string, pwd string)
-}
-
-type Valued interface {
-	Values() map[string]string
-	Command() DoCommand
-	RespondParser
-}
-
-type RespondParser interface {
-	Parse(raw *RawRespond) error
-}
-
-type Auth struct {
-	User string
-	Pwd  string
-}
-
-func (a Auth) Sig() (usr string, pwd string) {
-	return a.User, a.Pwd
-}
-
-func clusterSigParams(sig ClusterSig) map[string]string {
-
-	if sig == nil {
-		return make(map[string]string)
 	}
 
-	return map[string]string{
-		"--cluster": sig.ClusterSig(),
-	}
+	return
+
 }
 
-func infobaseSigParams(sig InfobaseSig) map[string]string {
+func (r *runner) runTry(ctx context.Context, command string, args []string) (respond []byte, err error) {
 
-	if sig == nil {
-		return make(map[string]string)
-	}
+	ctx, _ = context.WithTimeout(ctx, r.Timeout)
 
-	return map[string]string{
-		"--infobase": sig.InfobaseSig(),
-	}
-}
+	cmd := exec.CommandContext(ctx, command, args...)
 
-func clusterAuthParams(auth ClusterAuth) map[string]string {
+	cmd.Stdout = new(bytes.Buffer)
+	cmd.Stderr = new(bytes.Buffer)
+	errch := make(chan error, 1)
 
-	if auth == nil {
-		return make(map[string]string)
-	}
-
-	user, pwd := auth.ClusterAuth()
-
-	return map[string]string{
-		"--cluster-user": user,
-		"--cluster-pwd":  pwd,
-	}
-}
-
-func infobaseAuthParams(auth InfobaseAuth) map[string]string {
-
-	if auth == nil {
-		return make(map[string]string)
-	}
-
-	user, pwd := auth.InfobaseAuth()
-
-	return map[string]string{
-		"--infobase-user": user,
-		"--infobase-pwd":  pwd,
-	}
-}
-
-type RawRespond struct {
-	Status        bool
-	raw           []byte
-	parsedRespond interface{}
-	Error         error
-}
-
-func newRawRespond(data []byte, err error) *RawRespond {
-
-	res := &RawRespond{
-		raw:    data,
-		Error:  err,
-		Status: true,
-	}
-
+	err = cmd.Start()
 	if err != nil {
-		res.Status = false
+		return respond, fmt.Errorf("Произошла ошибка запуска:\n\terr:%v\n\tПараметры: %v\n\t", err.Error(), cmd.Args)
 	}
 
-	return res
-}
+	go func() {
+		errch <- cmd.Wait()
+	}()
 
-func extractOptions(how []interface{}) *DoOptions {
+	select {
+	case <-ctx.Done(): // timeout
 
-	var opts DoOptions
+		return respond, ctx.Err()
 
-	for _, prop := range how {
+	case err := <-errch:
+		if err != nil {
 
-		switch opt := prop.(type) {
-		case *DoOptions:
-			opts = *opt.copy()
-		case DoOptions:
-			opts = *opt.copy()
-		case DoOption:
-			opt(&opts)
+			stderr := cmd.Stderr.(*bytes.Buffer).Bytes()
+			errText := fmt.Sprintf("Произошла ошибка запуска:\n\terr:%v\n\tПараметры: %v\n\t", err.Error(), cmd.Args)
 
-		default:
-			panic("unsupported doOption")
+			stdErrText, _ := decodeOutBytes(stderr)
+
+			if len(stderr) > 0 {
+				errText += fmt.Sprintf("StdErr:%v\n", stdErrText)
+			}
+
+			return respond, errors.New(errText)
+
+		} else {
+
+			in := cmd.Stdout.(*bytes.Buffer).Bytes()
+
+			respond, err = decodeOutBytes(in)
+
+			if err != nil {
+				return respond, err
+			}
+
+			return respond, nil
 		}
 	}
-
-	return &opts
-}
-
-func extractParams(props []interface{}) (params map[string]string) {
-
-	for _, prop := range props {
-
-		clusterSig := prop.(ClusterSig)
-		params = mergeParams(params, clusterSigParams(clusterSig))
-		infobaseSig := prop.(InfobaseSig)
-		params = mergeParams(params, infobaseSigParams(infobaseSig))
-		clusterAuth := prop.(ClusterAuth)
-		params = mergeParams(params, clusterAuthParams(clusterAuth))
-		infobaseAuth := prop.(InfobaseAuth)
-		params = mergeParams(params, infobaseAuthParams(infobaseAuth))
-
-	}
-
-	return params
-}
-
-func (m *Manager) embedParams() (params map[string]string) {
-
-	params = mergeParams(params, clusterSigParams(m))
-	params = mergeParams(params, clusterAuthParams(m))
-
-	return params
-
 }

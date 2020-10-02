@@ -1,6 +1,9 @@
 package rac
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type LockInfo struct {
 	Connection  string    //connection : 00000000-0000-0000-0000-000000000000
@@ -141,6 +144,7 @@ type InfobaseInfo struct {
 	DbServer                               string    //db-server                                  : sql
 	DbName                                 string    //db-name                                    : base
 	DbUser                                 string    //db-user                                    : user
+	DbPwd                                  string    `rac:"="` //--db-pwd=<pwd>  пароль администратора базы данных
 	SecurityLevel                          int       //security-level                             : 0
 	LicenseDistribution                    string    //license-distribution                       : allow
 	ScheduledJobsDeny                      bool      //scheduled-jobs-deny                        : off
@@ -156,6 +160,94 @@ type InfobaseInfo struct {
 	SafeModeSecurityProfileName            string    //safe-mode-security-profile-name            :
 	ReserveWorkingProcesses                bool      //reserve-working-processes                  : no
 
+}
+
+func (i InfobaseInfo) Summary() InfobaseSummaryInfo {
+	return InfobaseSummaryInfo{
+		UUID:        i.UUID,
+		Name:        i.Name,
+		Description: i.Description,
+	}
+
+}
+
+func (i InfobaseInfo) InfobaseSig() string {
+	return i.UUID
+}
+
+func (i InfobaseInfo) UpdateChanges(new InfobaseInfo) InfobaseUpdate {
+
+	update := InfobaseUpdate{
+		UUID: i.UUID,
+	}
+
+	update.DbPwd = new.DbPwd
+	update.Dbms = getStringChanges(i.Dbms, new.Dbms)
+	update.DbName = getStringChanges(i.DbName, new.DbName)
+	update.DbUser = getStringChanges(i.Description, new.DbUser)
+	update.LicenseDistribution = getStringChanges(i.LicenseDistribution, new.LicenseDistribution)
+	update.DeniedMessage = getStringChanges(i.DeniedMessage, new.DeniedMessage)
+	update.DeniedParameter = getStringChanges(i.DeniedParameter, new.DeniedParameter)
+	update.PermissionCode = getStringChanges(i.PermissionCode, new.PermissionCode)
+	update.ExternalSessionManagerConnectionDtring = getStringChanges(i.ExternalSessionManagerConnectionDtring, new.ExternalSessionManagerConnectionDtring)
+	update.SecurityProfileName = getStringChanges(i.SecurityProfileName, new.SecurityProfileName)
+	update.SafeModeSecurityProfileName = getStringChanges(i.SafeModeSecurityProfileName, new.SafeModeSecurityProfileName)
+
+	update.SessionsDeny = getBoolChanges(i.SessionsDeny, new.SessionsDeny)
+	update.ReserveWorkingProcesses = getBoolChanges(i.ReserveWorkingProcesses, new.ReserveWorkingProcesses)
+	update.ExternalSessionManagerRequired = getBoolChanges(i.ExternalSessionManagerRequired, new.ExternalSessionManagerRequired)
+	update.ScheduledJobsDeny = getBoolChanges(i.ScheduledJobsDeny, new.ScheduledJobsDeny)
+
+	update.DeniedFrom = getTimeChanges(i.DeniedFrom, new.DeniedFrom)
+	update.DeniedTo = getTimeChanges(i.DeniedTo, new.DeniedTo)
+	//update.SecurityLevel = getIntChanges(i.SecurityLevel, new.SecurityLevel)
+
+	return update
+}
+
+func getIntChanges(old, new int) int {
+
+	if old == new {
+		return -1
+	}
+	return new
+}
+
+func getStringChanges(old, new string) string {
+
+	if strings.EqualFold(old, new) {
+		return ""
+	}
+	return new
+}
+
+func getTimeChanges(old, new time.Time) time.Time {
+
+	if old.Equal(new) {
+		return time.Time{}
+	}
+	return new
+}
+
+func getBoolChanges(old, new bool) YasNoBoolType {
+
+	if old == new {
+		return NullBool
+	} else {
+		return NullBool.FromBool(new)
+	}
+
+}
+
+type InfobaseSummaryInfo struct {
+	UUID        string `rac:"infobase"` //infobase : efa3672f-947a-4d84-bd58-b21997b83561
+	Name        string //name     : УППБоеваяБаза
+	Description string `rac:"descr"` //descr    : "УППБоеваяБаза"
+
+}
+
+func (i InfobaseSummaryInfo) InfobaseSig() string {
+	return i.UUID
 }
 
 type ServerInfo struct {

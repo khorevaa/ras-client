@@ -1,33 +1,65 @@
 package rac
 
 import (
-	"context"
+	"errors"
 	"time"
 )
+
+type ManagerOptions struct {
+	V8Version       string
+	RacPath         string
+	UpdateInterval  time.Duration
+	Timeout         time.Duration
+	TryTimeoutCount int
+	DetectCluster   bool
+	ClusterAuth     struct {
+		User string
+		Pwd  string
+	}
+	Logger Logger
+	Runner Runner
+}
 
 type Option func(o *Options)
 
 type Options struct {
-	v8Version         string
-	racPath           string
-	updateInterval    time.Duration
-	timeout           time.Duration
-	ctx               context.Context
-	autoSetDefCluster bool
-	clusterAuth       Auth
-}
-
-type DoOption func(o *DoOptions)
-
-type DoOptions struct {
-	Cluster string
-	Process string
+	Cluster  string
+	Process  string
+	Infobase string
 
 	InfobaseAuth *Auth
 	ClusterAuth  *Auth
 }
 
-func (o *DoOptions) copy() *DoOptions {
+func (o *Options) Options(opts ...interface{}) (err error) {
+
+	defer func() {
+		if e := recover(); e != nil {
+			switch errT := e.(type) {
+			case error:
+				err = errT
+			case string:
+				err = errors.New(errT)
+			default:
+				panic(e)
+			}
+		}
+	}()
+
+	for _, opt := range opts {
+
+		optFn, ok := opt.(Option)
+
+		if ok {
+			optFn(o)
+		}
+
+	}
+
+	return
+}
+
+func (o *Options) copy() *Options {
 
 	newO := *o
 
@@ -35,7 +67,7 @@ func (o *DoOptions) copy() *DoOptions {
 
 }
 
-func (o *DoOptions) Values() map[string]string {
+func (o *Options) Values() map[string]string {
 
 	values := make(map[string]string)
 
@@ -65,9 +97,9 @@ func (o *DoOptions) Values() map[string]string {
 
 }
 
-func WithInfobaseAuth(user, pwd string) DoOption {
+func WithInfobaseAuth(user, pwd string) Option {
 
-	return func(o *DoOptions) {
+	return func(o *Options) {
 		if len(user) == 0 {
 			return
 		}
@@ -79,9 +111,31 @@ func WithInfobaseAuth(user, pwd string) DoOption {
 	}
 }
 
-func WithProcess(process string) DoOption {
+func WithInfobase(infobase interface{}) Option {
 
-	return func(o *DoOptions) {
+	return func(o *Options) {
+
+		switch i := infobase.(type) {
+
+		case InfobaseSig:
+			o.Infobase = i.InfobaseSig()
+
+		case string:
+			if len(i) == 0 {
+				return
+			}
+
+			o.Infobase = i
+		default:
+			panic(errors.New("unsupported infobase type"))
+		}
+
+	}
+}
+
+func WithProcess(process string) Option {
+
+	return func(o *Options) {
 		if len(process) == 0 {
 			return
 		}
@@ -90,9 +144,9 @@ func WithProcess(process string) DoOption {
 	}
 }
 
-func WithAuth(user, pwd string) DoOption {
+func WithAuth(user, pwd string) Option {
 
-	return func(o *DoOptions) {
+	return func(o *Options) {
 		if len(user) == 0 {
 			return
 		}
@@ -102,82 +156,4 @@ func WithAuth(user, pwd string) DoOption {
 			Pwd:  pwd,
 		}
 	}
-}
-
-func WithContext(ctx context.Context) Option {
-
-	return func(o *Options) {
-		if ctx == nil {
-			return
-		}
-
-		o.ctx = ctx
-	}
-
-}
-
-func WithClusterAuth(user, pwd string) Option {
-
-	return func(o *Options) {
-		if len(user) == 0 {
-			return
-		}
-
-		o.clusterAuth = Auth{
-			User: user,
-			Pwd:  pwd,
-		}
-	}
-
-}
-
-func WithTimeout(timeout time.Duration) Option {
-
-	return func(o *Options) {
-		if timeout == 0 {
-			return
-		}
-
-		o.timeout = timeout
-	}
-
-}
-
-func WithNoUpdate() Option {
-
-	return func(o *Options) {
-		o.updateInterval = 0
-	}
-
-}
-
-func WithUpdate(duration time.Duration) Option {
-
-	return func(o *Options) {
-		o.updateInterval = duration
-	}
-}
-
-func WithV8Version(v8version string) Option {
-
-	return func(o *Options) {
-		if len(v8version) == 0 {
-			return
-		}
-
-		o.v8Version = v8version
-	}
-
-}
-
-func WithPath(path string) Option {
-
-	return func(o *Options) {
-		if len(path) == 0 {
-			return
-		}
-
-		o.racPath = path
-	}
-
 }

@@ -1,6 +1,10 @@
 package rac
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"github.com/hashicorp/go-multierror"
+)
 
 type ConnectionsCommandType string
 
@@ -13,9 +17,19 @@ func (c ConnectionsCommandType) Check(params map[string]string) error {
 	}
 
 	switch c {
-	case ConnectionsInfoCommand, ConnectionsDisconnectCommand:
+	case ConnectionsInfoCommand:
 
 		if val, ok := params["--connection"]; !ok || len(val) == 0 {
+			err = errors.New("connection uuid must be identified")
+		}
+
+	case ConnectionsDisconnectCommand:
+
+		if val, ok := params["--connection"]; !ok || len(val) == 0 {
+			err = errors.New("connection uuid must be identified")
+		}
+
+		if val, ok := params["--process"]; !ok || len(val) == 0 {
 			err = errors.New("connection uuid must be identified")
 		}
 
@@ -249,5 +263,45 @@ func (m *Manager) ConnectionsList(what ConnectionsSig, opts ...interface{}) (Con
 	do.extractOptions(opts)
 
 	return m.Connections(*do, opts...)
+
+}
+
+func (m *Manager) DisconnectAllConnection(what ConnectionSig, opts ...interface{}) error {
+
+	doList := &ConnectionsList{}
+	if what != nil {
+		_, doList.Process, doList.Infobase = what.ConnectionSig()
+	}
+
+	doList.extractOptions(opts)
+
+	respList, err := m.Connections(*doList, opts...)
+
+	if err != nil {
+		return err
+	}
+
+	var result *multierror.Error
+
+	list := respList.List
+
+	var errStack []error
+
+	for _, conn := range list {
+
+		do := ConnectionsDisconnect{}
+		do.UUID, do.Process, _ = conn.ConnectionSig()
+
+		_, err := m.Connections(what, opts...)
+
+		if err != nil {
+			errStack = append(errStack, fmt.Errorf("connection %s process %s err: %v", do.UUID, do.Process, err))
+		}
+
+	}
+
+	_ = multierror.Append(result, errStack...)
+
+	return result.ErrorOrNil()
 
 }

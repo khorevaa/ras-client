@@ -313,7 +313,7 @@ func (m *Manager) LicenseInfo(what SessionsSig, opts ...interface{}) (LicensesRe
 
 }
 
-func (m *Manager) SessionTerminate(what SessionsSig, opts ...interface{}) (SessionsRespond, error) {
+func (m *Manager) TerminateSession(what SessionsSig, opts ...interface{}) (SessionsRespond, error) {
 
 	do := SessionsTerminate{}
 
