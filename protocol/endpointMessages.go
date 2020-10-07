@@ -1,9 +1,12 @@
 package protocol
 
-import "github.com/k0kubun/pp"
+import (
+	"github.com/k0kubun/pp"
+	uuid "github.com/satori/go.uuid"
+)
 
 const (
-	GET_AGENT_ADMINS_REQUEST = iota
+	GET_AGENT_ADMINS_REQUEST EndpointMessageType = iota
 	GET_AGENT_ADMINS_RESPONSE
 	GET_CLUSTER_ADMINS_REQUEST
 	GET_CLUSTER_ADMINS_RESPONSE
@@ -137,8 +140,8 @@ const (
 
 type EndpointMessageType int
 
-func (t EndpointMessageType) Type() MessageType {
-	return MessageType(t)
+func (t EndpointMessageType) Type() int {
+	return int(t)
 }
 
 type GetClustersRequest struct{}
@@ -152,14 +155,14 @@ func (_ GetClustersRequest) Format(_ *encoder) {
 }
 
 type GetClustersResponse struct {
-	Clusters []ClusterInfo
+	Clusters []*ClusterInfo
 }
 
-func (_ GetClustersResponse) Type() MessageType {
+func (_ *GetClustersResponse) Type() MessageType {
 	return GET_CLUSTERS_RESPONSE
 }
 
-func (_ GetClustersResponse) Parse(t MessageType, body []byte) error {
+func (r *GetClustersResponse) Parse(t MessageType, body []byte) error {
 
 	pp.Println(body)
 
@@ -189,6 +192,8 @@ func (_ GetClustersResponse) Parse(t MessageType, body []byte) error {
 	info.KillProblemProcesses = decoder.decodeBoolean()
 	info.KillByMemoryWithDump = decoder.decodeBoolean()
 
+	r.Clusters = append(r.Clusters, info)
+
 	return nil
 
 }
@@ -205,5 +210,63 @@ func (r AuthenticateAgentRequest) Format(e *encoder) {
 
 	e.encodeString(r.user)
 	e.encodeString(r.password)
+
+}
+
+type GetClusterManagersRequest struct {
+	ID uuid.UUID
+}
+
+func (_ GetClusterManagersRequest) Type() MessageType {
+	return GET_CLUSTER_MANAGERS_REQUEST
+}
+
+func (r GetClusterManagersRequest) Format(e *encoder) {
+
+	e.encodeUuid(r.ID)
+
+}
+
+type GetClusterManagersResponse struct {
+	Managers []*ClusterInfo
+}
+
+func (_ *GetClusterManagersResponse) Type() MessageType {
+	return GET_CLUSTER_MANAGERS_RESPONSE
+}
+
+func (r *GetClusterManagersResponse) Parse(t MessageType, body []byte) error {
+
+	pp.Println(body)
+
+	//decoder := NewDecoder(body)
+	////mType := decoder.decodeType()
+	////pp.Println("message type: %s", mType)
+	////_ = decoder.decodeByte()
+	////_ = decoder.decodeByte()
+	//
+	////t.Logf("endpoint: %v", EndpointId)
+	////t.Logf("format: %v", format)
+	////t.Logf("compression %v", format&0x1 != 0x0)
+	//
+	//info := &ClusterInfo{}
+	//info.UUID = decoder.decodeUUID().String()
+	//_ = decoder.decodeInt() // expirationTimeout
+	//info.Host = decoder.decodeString()
+	//info.ExpirationTimeout = int(decoder.decodeInt())
+	//info.Port = int(decoder.decodeUnsignedShort())
+	//info.MaxMemorySize = int(decoder.decodeInt())
+	//info.MaxMemoryTimeLimit = int(decoder.decodeInt())
+	//info.Name = decoder.decodeString()
+	//info.SecurityLevel = int(decoder.decodeInt())
+	//info.SessionFaultToleranceLevel = int(decoder.decodeInt())
+	//info.LoadBalancingMode = int(decoder.decodeInt()) // Не понтяно что
+	//info.ErrorsCountThreshold = int(decoder.decodeInt())
+	//info.KillProblemProcesses = decoder.decodeBoolean()
+	//info.KillByMemoryWithDump = decoder.decodeBoolean()
+	//
+	//r.Clusters = append(r.Clusters, info)
+
+	return nil
 
 }

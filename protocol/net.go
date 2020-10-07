@@ -158,7 +158,9 @@ func (m *RASConn) SendEndpointRequest(req RequestMessage, resp ...RespondMessage
 		return nullRespondMessage{}, errors.New("endpoint is in active")
 	}
 
-	endpointMessage := &EndpointMessage{}
+	endpointMessage := &EndpointMessage{
+		Respond: make(map[MessageType]RespondMessage),
+	}
 
 	if len(resp) == 1 {
 		endpointMessage.Respond[resp[0].Type()] = resp[0]
@@ -166,7 +168,7 @@ func (m *RASConn) SendEndpointRequest(req RequestMessage, resp ...RespondMessage
 
 	waitResp := []RespondMessage{endpointMessage, &EndpointFeature{}}
 
-	body := m.formatEndpointRequestMessage(req)
+	body := m.formatEndpointRequestMessage(req, VOID_MESSAGE_KIND)
 
 	requestData := formatMessageType(ENDPOINT_MESSAGE, body)
 
@@ -194,7 +196,7 @@ func formatRequestMessage(req RequestMessage) []byte {
 	}
 }
 
-func (m *RASConn) formatEndpointRequestMessage(req RequestMessage) []byte {
+func (m *RASConn) formatEndpointRequestMessage(req RequestMessage, kind EndpointMessageKind) []byte {
 
 	enc := NewEncoder()
 	req.Format(enc)
@@ -203,11 +205,10 @@ func (m *RASConn) formatEndpointRequestMessage(req RequestMessage) []byte {
 	enc = NewEncoder()
 
 	enc.encodeEndpointId(m.Endpoint.Id)
+	enc.encodeShort(m.Endpoint.Fornat)
+	enc.encodeByte(byte(kind))
 
-	enc.encodeShort(0) //m.Endpoint.Fornat) // EndpointFormat // Магия
-	enc.encodeByte(byte(1))
-	//enc.encodeByte(byte(0))
-	enc.encodeByte(0x0b)
+	enc.encodeType(req.Type()) // МАГИЯ без этого байта требует авторизации на центральном кластере
 
 	header := enc.Bytes()
 
@@ -310,7 +311,7 @@ func (m *RASConn) readFromConn(ctx context.Context) (reso rawRespond, err error)
 	dec := NewDecoder(header)
 	messageType := dec.decodeType()
 
-	pp.Println("messageType", messageType.String())
+	pp.Println("messageType", messageType)
 	size := dec.decodeSize()
 	pp.Println("size", size)
 
@@ -321,7 +322,7 @@ func (m *RASConn) readFromConn(ctx context.Context) (reso rawRespond, err error)
 	dry.PanicIf(n != int(size), "expected read "+strconv.Itoa(int(size))+" bytes, got "+strconv.Itoa(n))
 
 	resp := rawRespond{
-		messageType,
+		ConnectionMessageType(messageType),
 		size,
 		data,
 	}

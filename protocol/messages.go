@@ -3,6 +3,15 @@ package protocol
 import (
 	"errors"
 	"github.com/k0kubun/pp"
+	"io/ioutil"
+)
+
+type EndpointMessageKind int
+
+const (
+	EXCEPTION_KIND    EndpointMessageKind = -1
+	VOID_MESSAGE_KIND EndpointMessageKind = iota
+	MESSAGE_KIND
 )
 
 type ConnectMessageAck struct {
@@ -233,11 +242,11 @@ func (m EndpointFeature) Format(enc *encoder) {
 }
 
 type EndpointMessage struct {
-	size       int16
-	raw        []byte
-	Kind       int
-	EndpointID int
-
+	size        int16
+	raw         []byte
+	Kind        EndpointMessageKind
+	EndpointID  int
+	format      int
 	body        []byte
 	respondType MessageType
 	Respond     map[MessageType]RespondMessage
@@ -246,14 +255,15 @@ type EndpointMessage struct {
 func (m *EndpointMessage) Parse(t MessageType, body []byte) error {
 
 	decoder := NewDecoder(body)
-	m.EndpointID = decoder.decodeEndpointId()
-	m.Kind = int(decoder.decodeByte())
-	m.size = int16(decoder.decodeShort())
 	m.raw = body
-	m.respondType = MessageType(decoder.decodeUnsignedByte())
 
-	respBody := make([]byte, m.size)
-	_, err := decoder.Read(respBody)
+	m.EndpointID = decoder.decodeEndpointId()
+	m.Kind = EndpointMessageKind(decoder.decodeByte())
+	m.size = int16(decoder.decodeShort())
+	m.respondType = EndpointMessageType(decoder.decodeUnsignedByte())
+	m.format = int(decoder.decodeByte())
+
+	respBody, err := ioutil.ReadAll(decoder) ///Читаем то что осталось
 
 	if err != nil {
 		return err
@@ -262,7 +272,7 @@ func (m *EndpointMessage) Parse(t MessageType, body []byte) error {
 	typedFormat, ok := m.Respond[m.respondType]
 
 	if ok {
-		_ = typedFormat.Parse(m.respondType, body)
+		_ = typedFormat.Parse(m.respondType, respBody)
 	}
 
 	return nil

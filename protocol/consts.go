@@ -30,31 +30,35 @@ func getProtocolParameterName(parameterName string) string {
 
 //public enum MessageType
 
-type MessageType byte
+type MessageType interface {
+	Type() int
+}
+
+type ConnectionMessageType int
 
 const (
-	NEGOTIATE         MessageType = 0
-	CONNECT           MessageType = 1
-	CONNECT_ACK       MessageType = 2
-	START_TLS         MessageType = 3
-	DISCONNECT        MessageType = 4
-	SASL_NEGOTIATE    MessageType = 5
-	SASL_AUTH         MessageType = 6
-	SASL_CHALLENGE    MessageType = 7
-	SASL_SUCCESS      MessageType = 8
-	SASL_FAILURE      MessageType = 9
-	SASL_ABORT        MessageType = 10
-	ENDPOINT_OPEN     MessageType = 11
-	ENDPOINT_OPEN_ACK MessageType = 12
-	ENDPOINT_CLOSE    MessageType = 13
-	ENDPOINT_MESSAGE  MessageType = 14
-	ENDPOINT_FAILURE  MessageType = 15
-	KEEP_ALIVE        MessageType = 16
+	NEGOTIATE         ConnectionMessageType = 0
+	CONNECT           ConnectionMessageType = 1
+	CONNECT_ACK       ConnectionMessageType = 2
+	START_TLS         ConnectionMessageType = 3
+	DISCONNECT        ConnectionMessageType = 4
+	SASL_NEGOTIATE    ConnectionMessageType = 5
+	SASL_AUTH         ConnectionMessageType = 6
+	SASL_CHALLENGE    ConnectionMessageType = 7
+	SASL_SUCCESS      ConnectionMessageType = 8
+	SASL_FAILURE      ConnectionMessageType = 9
+	SASL_ABORT        ConnectionMessageType = 10
+	ENDPOINT_OPEN     ConnectionMessageType = 11
+	ENDPOINT_OPEN_ACK ConnectionMessageType = 12
+	ENDPOINT_CLOSE    ConnectionMessageType = 13
+	ENDPOINT_MESSAGE  ConnectionMessageType = 14
+	ENDPOINT_FAILURE  ConnectionMessageType = 15
+	KEEP_ALIVE        ConnectionMessageType = 16
 
-	NULL_TYPE MessageType = 127
+	NULL_TYPE ConnectionMessageType = 127
 )
 
-func (m MessageType) String() string {
+func (m ConnectionMessageType) String() string {
 
 	switch m {
 
@@ -72,6 +76,10 @@ func (m MessageType) String() string {
 		return "неизвестный тим ответа"
 	}
 
+}
+
+func (m ConnectionMessageType) Type() int {
+	return int(m)
 }
 
 //public final class TypeCodes
@@ -96,4 +104,7 @@ const (
 
 func (t ServiceWireType) raw() byte {
 	return byte(t)
+}
+func (t ServiceWireType) Type() int {
+	return int(t)
 }

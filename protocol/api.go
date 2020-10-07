@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"github.com/k0kubun/pp"
+	uuid "github.com/satori/go.uuid"
 	"github.com/xelaj/go-dry"
 )
 
@@ -38,15 +39,22 @@ func (m *RASConn) OpenEndpoint(version string) (RespondMessage, error) {
 	return resp, err
 }
 
-func (m *RASConn) GetClusters() ([]ClusterInfo, error) {
+func (m *RASConn) GetClusters() ([]*ClusterInfo, error) {
 
-	resp, err := m.SendEndpointRequest(&GetClustersRequest{}, &GetClustersResponse{})
+	response := GetClustersResponse{}
+	resp, err := m.SendEndpointRequest(&GetClustersRequest{}, &response)
 
 	dry.PanicIfErr(err)
 
 	pp.Println(resp)
 
-	return resp.(GetClustersResponse).Clusters, err
+	endpointMessage := resp.(*EndpointMessage)
+
+	message := endpointMessage.Respond[response.Type()]
+
+	r := message.(*GetClustersResponse)
+
+	return r.Clusters, err
 }
 
 func (m *RASConn) AuthenticateAgent(user, password string) error {
@@ -61,6 +69,26 @@ func (m *RASConn) AuthenticateAgent(user, password string) error {
 	//pp.Println(resp)
 
 	return err
+}
+
+func (m *RASConn) GetClusterManagers(id uuid.UUID) ([]*ClusterInfo, error) {
+
+	response := GetClusterManagersResponse{}
+	resp, err := m.SendEndpointRequest(&GetClusterManagersRequest{
+		ID: id,
+	}, &response)
+
+	dry.PanicIfErr(err)
+
+	pp.Println(resp)
+
+	endpointMessage := resp.(*EndpointMessage)
+
+	message := endpointMessage.Respond[response.Type()]
+
+	_ = message.(*GetClusterManagersResponse)
+
+	return nil, err
 }
 
 type ClusterInfo struct {

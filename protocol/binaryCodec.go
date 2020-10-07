@@ -141,7 +141,7 @@ func (e *encoder) encodeTypedValue(val interface{}) {
 	}
 
 	ServiceWireType := detectType(val)
-	e.encodeType(MessageType(ServiceWireType))
+	e.encodeType(ServiceWireType)
 
 	switch ServiceWireType {
 
@@ -243,11 +243,11 @@ func (e *encoder) encodeNullableSize(size int) {
 
 func (e *encoder) encodeType(val MessageType) {
 
-	if int(val) == NULL_BYTE {
+	if int(val.Type()) == NULL_BYTE {
 		e.encodeNull()
 		return
 	}
-	e.WriteByte(byte(val))
+	e.WriteByte(byte(val.Type()))
 
 }
 
@@ -428,7 +428,7 @@ func (e *Decoder) decodeNullableSize() int {
 
 }
 
-func (e *Decoder) decodeType() MessageType {
+func (e *Decoder) decodeType() int {
 
 	ff := 0xFFFFFF80
 	b1, _ := e.ReadByte()
@@ -440,10 +440,10 @@ func (e *Decoder) decodeType() MessageType {
 		if cur&0x7F != 0x0 {
 			panic("null expected")
 		}
-		return NULL_TYPE
+		return int(NULL_TYPE)
 	}
 
-	return MessageType(cur)
+	return cur
 
 }
 
