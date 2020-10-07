@@ -14,7 +14,7 @@ const (
 	SIZEOF_SHORT   = 2
 	SIZEOF_        = 4
 	SIZEOF_LONG    = 8
-	NULL_BYTE      = -128
+	NULL_BYTE      = 0x80
 	TRUE_BYTE      = 1
 	FALSE_BYTE     = 0
 	MAX_SHIFT      = 7
@@ -292,6 +292,20 @@ func (e *Decoder) decodeByte() byte {
 
 	b, _ := e.ReadByte()
 	return b
+}
+
+func (e *Decoder) decodeSlice(size int) [][]byte {
+
+	var parts [][]byte
+	part := make([]byte, size)
+
+	for n, err := e.Read(part); n == size && err != nil; {
+
+		parts = append(parts, part)
+
+	}
+
+	return parts
 }
 
 func (e *Decoder) decodeUnsignedByte() byte {

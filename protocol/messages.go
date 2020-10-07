@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"errors"
 	"github.com/k0kubun/pp"
 	"io/ioutil"
 )
@@ -22,11 +21,7 @@ func (r *ConnectMessageAck) Type() MessageType {
 	return CONNECT_ACK
 }
 
-func (r *ConnectMessageAck) Parse(t MessageType, body []byte) error {
-
-	if t != CONNECT_ACK {
-		return errors.New("error respond message type")
-	}
+func (r *ConnectMessageAck) Parse(body []byte) error {
 
 	r.data = body
 
@@ -137,7 +132,7 @@ type OpenEndpointMessageAck struct {
 	params map[string]interface{}
 }
 
-func (m *OpenEndpointMessageAck) Parse(t MessageType, body []byte) error {
+func (m *OpenEndpointMessageAck) Parse(body []byte) error {
 	//panic("implement me")
 
 	dec := NewDecoder(body)
@@ -196,7 +191,7 @@ func (e *causeError) Error() string {
 
 }
 
-func (m *EndpointFeature) Parse(t MessageType, body []byte) error {
+func (m *EndpointFeature) Parse(body []byte) error {
 
 	dec := NewDecoder(body)
 	m.ServiceID = dec.decodeString()
@@ -230,7 +225,7 @@ func (m *EndpointFeature) Parse(t MessageType, body []byte) error {
 }
 
 func (m *EndpointFeature) String() string {
-	return ""
+	return m.Error.Error()
 }
 
 func (m *EndpointFeature) Type() MessageType {
@@ -242,26 +237,38 @@ func (m EndpointFeature) Format(enc *encoder) {
 }
 
 type EndpointMessage struct {
-	size        int16
-	raw         []byte
-	Kind        EndpointMessageKind
-	EndpointID  int
-	format      int
-	body        []byte
+	raw []byte
+
+	endpointID int
+	format     int
+
+	kind EndpointMessageKind
+
 	respondType MessageType
 	Respond     map[MessageType]RespondMessage
 }
 
-func (m *EndpointMessage) Parse(t MessageType, body []byte) error {
+func (m *EndpointMessage) addResponse(r ...RespondMessage) {
+
+	if m.Respond == nil {
+		m.Respond = make(map[MessageType]RespondMessage)
+	}
+	for _, message := range r {
+		m.Respond[message.Type()] = message
+	}
+
+}
+
+func (m *EndpointMessage) Parse(body []byte) error {
 
 	decoder := NewDecoder(body)
 	m.raw = body
 
-	m.EndpointID = decoder.decodeEndpointId()
-	m.Kind = EndpointMessageKind(decoder.decodeByte())
-	m.size = int16(decoder.decodeShort())
+	m.endpointID = decoder.decodeEndpointId()
+	m.format = int(decoder.decodeShort())
+
+	m.kind = EndpointMessageKind(decoder.decodeByte())
 	m.respondType = EndpointMessageType(decoder.decodeUnsignedByte())
-	m.format = int(decoder.decodeByte())
 
 	respBody, err := ioutil.ReadAll(decoder) ///Читаем то что осталось
 
@@ -272,7 +279,12 @@ func (m *EndpointMessage) Parse(t MessageType, body []byte) error {
 	typedFormat, ok := m.Respond[m.respondType]
 
 	if ok {
-		_ = typedFormat.Parse(m.respondType, respBody)
+
+		err = typedFormat.Parse(respBody)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	return nil

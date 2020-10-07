@@ -162,37 +162,32 @@ func (_ *GetClustersResponse) Type() MessageType {
 	return GET_CLUSTERS_RESPONSE
 }
 
-func (r *GetClustersResponse) Parse(t MessageType, body []byte) error {
-
-	pp.Println(body)
+func (r *GetClustersResponse) Parse(body []byte) error {
 
 	decoder := NewDecoder(body)
-	//mType := decoder.decodeType()
-	//pp.Println("message type: %s", mType)
-	//_ = decoder.decodeByte()
-	//_ = decoder.decodeByte()
 
-	//t.Logf("endpoint: %v", EndpointId)
-	//t.Logf("format: %v", format)
-	//t.Logf("compression %v", format&0x1 != 0x0)
+	count := decoder.decodeSize()
 
-	info := &ClusterInfo{}
-	info.UUID = decoder.decodeUUID().String()
-	_ = decoder.decodeInt() // expirationTimeout
-	info.Host = decoder.decodeString()
-	info.ExpirationTimeout = int(decoder.decodeInt())
-	info.Port = int(decoder.decodeUnsignedShort())
-	info.MaxMemorySize = int(decoder.decodeInt())
-	info.MaxMemoryTimeLimit = int(decoder.decodeInt())
-	info.Name = decoder.decodeString()
-	info.SecurityLevel = int(decoder.decodeInt())
-	info.SessionFaultToleranceLevel = int(decoder.decodeInt())
-	info.LoadBalancingMode = int(decoder.decodeInt()) // Не понтяно что
-	info.ErrorsCountThreshold = int(decoder.decodeInt())
-	info.KillProblemProcesses = decoder.decodeBoolean()
-	info.KillByMemoryWithDump = decoder.decodeBoolean()
+	for i := 0; i < count; i++ {
 
-	r.Clusters = append(r.Clusters, info)
+		info := &ClusterInfo{}
+		info.UUID = decoder.decodeUUID().String()
+		_ = decoder.decodeInt() // expirationTimeout
+		info.Host = decoder.decodeString()
+		info.ExpirationTimeout = int(decoder.decodeInt())
+		info.Port = int(decoder.decodeUnsignedShort())
+		info.MaxMemorySize = int(decoder.decodeInt())
+		info.MaxMemoryTimeLimit = int(decoder.decodeInt())
+		info.Name = decoder.decodeString()
+		info.SecurityLevel = int(decoder.decodeInt())
+		info.SessionFaultToleranceLevel = int(decoder.decodeInt())
+		info.LoadBalancingMode = int(decoder.decodeInt()) // Не понтяно что
+		info.ErrorsCountThreshold = int(decoder.decodeInt())
+		info.KillProblemProcesses = decoder.decodeBoolean()
+		info.KillByMemoryWithDump = decoder.decodeBoolean()
+
+		r.Clusters = append(r.Clusters, info)
+	}
 
 	return nil
 
@@ -235,7 +230,7 @@ func (_ *GetClusterManagersResponse) Type() MessageType {
 	return GET_CLUSTER_MANAGERS_RESPONSE
 }
 
-func (r *GetClusterManagersResponse) Parse(t MessageType, body []byte) error {
+func (r *GetClusterManagersResponse) Parse(body []byte) error {
 
 	pp.Println(body)
 

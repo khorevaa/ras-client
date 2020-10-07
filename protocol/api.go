@@ -66,8 +66,6 @@ func (m *RASConn) AuthenticateAgent(user, password string) error {
 
 	dry.PanicIfErr(err)
 
-	//pp.Println(resp)
-
 	return err
 }
 
@@ -98,7 +96,7 @@ type ClusterInfo struct {
 	Name                       string // Name                          : "Новый кластер"
 	ExpirationTimeout          int    // ExpirationTimeout expiration-timeout            : 0
 	LifetimeLimit              int    // LifetimeLimit lifetime-limit                : 0
-	MaxMemorySize              int    // MaxMemorySize max-memory-size               : 0
+	MaxMemorySize              int    // MaxMemorySize max-memory-count               : 0
 	MaxMemoryTimeLimit         int    // MaxMemoryTimeLimit max-memory-time-limit         : 0
 	SecurityLevel              int    // SecurityLevel security-level                : 0
 	SessionFaultToleranceLevel int    // SessionFaultToleranceLevel session-fault-tolerance-level : 0

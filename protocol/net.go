@@ -158,13 +158,8 @@ func (m *RASConn) SendEndpointRequest(req RequestMessage, resp ...RespondMessage
 		return nullRespondMessage{}, errors.New("endpoint is in active")
 	}
 
-	endpointMessage := &EndpointMessage{
-		Respond: make(map[MessageType]RespondMessage),
-	}
-
-	if len(resp) == 1 {
-		endpointMessage.Respond[resp[0].Type()] = resp[0]
-	}
+	endpointMessage := &EndpointMessage{}
+	endpointMessage.addResponse(resp...)
 
 	waitResp := []RespondMessage{endpointMessage, &EndpointFeature{}}
 
@@ -288,7 +283,7 @@ func (m *RASConn) startReadingResponses(ctx context.Context) {
 					return
 				}
 
-				err = parser.Parse(rawResp.Type(), rawResp.Data())
+				err = parser.Parse(rawResp.Data())
 				if err != nil {
 					m.ackWaitError <- err
 					return
@@ -313,7 +308,7 @@ func (m *RASConn) readFromConn(ctx context.Context) (reso rawRespond, err error)
 
 	pp.Println("messageType", messageType)
 	size := dec.decodeSize()
-	pp.Println("size", size)
+	pp.Println("count", size)
 
 	data := make([]byte, size)
 	reader := dry.NewCancelableReader(ctx, m.conn)
@@ -358,14 +353,14 @@ type RequestMessage interface {
 }
 
 type RespondMessage interface {
-	Parse(t MessageType, body []byte) error
+	Parse(body []byte) error
 	Type() MessageType
 }
 
 type nullRespondMessage struct {
 }
 
-func (_ nullRespondMessage) Parse(_ MessageType, _ []byte) error {
+func (_ nullRespondMessage) Parse(_ []byte) error {
 	return nil
 }
 

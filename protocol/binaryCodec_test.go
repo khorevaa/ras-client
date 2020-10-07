@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/hex"
+	"github.com/k0kubun/pp"
 
 	"testing"
 )
@@ -13,32 +14,33 @@ func TestNewDecoder(t *testing.T) {
 	messageType := dec.decodeByte()
 	t.Logf("message type: %v", messageType)
 	size := dec.decodeByte()
-	t.Logf("size: %v", size)
+	t.Logf("count: %v", size)
 
 	testData := "010000010c014af13da5f0fc44cbae420f9fbbff76ef0000001e0c7372762d756b2d6170703232000000000605000000000000000021d09bd0bed0bad0b0d0bbd18cd0bdd18bd0b920d0bad0bbd0b0d181d182d0b5d180000000000000000000000000000000000000"
 	bData, _ := hex.DecodeString(testData)
 
 	decoder := NewDecoder(bData)
 
-	messageFormat := decoder.decodeByte()
-	t.Logf("message format: %v", messageFormat)
+	EndpointId := decoder.decodeEndpointId()
+	format := decoder.decodeShort()
+
+	messageKind := decoder.decodeByte()
+	//t.Logf("message kind: %d", EndpointMessageKind(messageKind))
 	//private static final byte VOID_MESSAGE = 0;
 	//private static final byte MESSAGE = 1;
 	//private static final byte EXCEPTION = -1;
+	mType := decoder.decodeUnsignedByte()
+	chunkCount := decoder.decodeSize()
 
-	size2 := decoder.decodeShort()
-	t.Logf("size: %v", size2)
-
-	mType := decoder.decodeType()
-	t.Logf("message type: %v", mType)
+	//t.Logf("message type: %v", mType)
 	//_ = decoder.decodeByte()
 	//_ = decoder.decodeByte()
+	//t.Logf("chunk count: %v", size2)
 
-	EndpointId := decoder.decodeEndpointId()
-	format := decoder.decodeByte()
-
+	pp.Println("message kind:", int(messageKind), "endpoint", EndpointId, "chunk count", int(chunkCount),
+		"format", int(format), "respond type", int(mType))
 	//size2 := decoder.decodeShort()
-	//t.Logf("size: %v", size2)
+	//t.Logf("count: %v", size2)
 
 	//b2 := decoder.decodeByte()
 	//t.Logf("b2: %v", b2)
@@ -109,11 +111,54 @@ func TestNewDecoder2(t *testing.T) {
 	decoder := NewDecoder(data2)
 	mType := decoder.decodeNullableSize()
 	t.Logf("count: %v", mType)
-	//size := decoder.decodeSize()
-	//t.Logf("size: %v", size)
+	//count := decoder.decodeSize()
+	//t.Logf("count: %v", count)
 	//
 	count := decoder.decodeString()
 	format := decoder.decodeShort()
 	t.Logf("param: %v, value %v ", count, format)
 
 }
+
+//
+//protected Object decode(final ChannelHandlerContext ctx, final Channel channel, final ChannelBuffer buffer, final MessageDecoderState state) throws Exception {
+//if (buffer.readableBytes() == 0) {
+//return null;
+//}
+//switch (state) {
+//case READ_MESSAGE_TYPE: {
+//this.messageType = this.wireFormat.decodeType(buffer, (IServiceWireDecoder)this.codec);
+//this.checkpoint((Enum)MessageDecoderState.READ_MESSAGE_LENGTH);
+//}
+//case READ_MESSAGE_LENGTH: {
+//this.length = this.codec.decodeSize(buffer);
+//this.checkpoint((Enum)MessageDecoderState.READ_MESSAGE_BODY);
+//}
+//case READ_MESSAGE_BODY: {
+//if (buffer.readableBytes() < this.length) {
+//return null;
+//}
+//final ChannelBuffer body = buffer.readSlice((int)this.length);
+//this.checkpoint((Enum)MessageDecoderState.READ_MESSAGE_TYPE);
+//if (MessageDecoderHandler.LOGGER.isLoggable(Level.FINE)) {
+//MessageDecoderHandler.LOGGER.log(Level.FINE, "Trying to parse message " + this.messageType.toString());
+//}
+//final IServiceWireMessage msg = this.parseMessage(this.messageType, body);
+//if (MessageDecoderHandler.LOGGER.isLoggable(Level.FINE)) {
+//MessageDecoderHandler.LOGGER.log(Level.FINE, "Parsed message " + msg.toString());
+//}
+//return msg;
+//}
+//default: {
+//throw new Error("Shouldn't reach here.");
+//}
+//}
+//}
+//
+//private IServiceWireMessage parseMessage(final MessageType type, final ChannelBuffer buffer) throws Exception {
+//if (type == MessageType.ENDPOINT_MESSAGE) {
+//final EndpointId endpointId = this.codec.decodeEndpointId(buffer);
+//final short format = this.codec.decodeShort(buffer);
+//return (IServiceWireMessage)new EndpointMessage(endpointId, format, buffer.slice());
+//}
+//return this.wireFormat.parseMessage(buffer, (IServiceWireDecoder)this.codec, type);

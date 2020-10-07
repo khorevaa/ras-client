@@ -11,7 +11,6 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.6.1
 	github.com/v8platform/find v0.0.0-20200629131701-72a40bdf1034
-	github.com/xelaj/errs v0.0.0-20200831133608-d1c11863e019
 	github.com/xelaj/go-dry v0.0.0-20201004191957-aab3eecf0604
 	golang.org/x/text v0.3.3
 )
