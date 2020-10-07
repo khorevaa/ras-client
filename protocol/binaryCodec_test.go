@@ -2,72 +2,11 @@ package protocol
 
 import (
 	"encoding/hex"
-	"fmt"
-	"net"
-	"os"
+
 	"testing"
 )
 
 func TestNewDecoder(t *testing.T) {
-
-	conn, err := net.Dial("tcp", "srv-uk-app22:1545")
-	if err != nil {
-		fmt.Println(err)
-		t.Fail()
-	}
-
-	defer conn.Close()
-	d := "1c53575001000100"
-	data, _ := hex.DecodeString(d)
-
-	i, err := conn.Write([]byte(data))
-
-	data2, _ := hex.DecodeString("0116010f636f6e6e6563742e74696d656f757404000007d0")
-
-	i, err = conn.Write([]byte(data2))
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("write bytes %d", i)
-
-	//done := make(chan struct{})
-	//fnRead := func() {
-
-	request := make([]byte, 128)
-
-	//for {
-	read_len, err := conn.Read(request)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %s", err)
-		t.Fail()
-		//break
-	}
-	enc := NewEncoder()
-	enc.encodeShort(135)
-
-	t.Logf("req: %b %s", enc.Bytes(), hex.EncodeToString(enc.Bytes()))
-
-	t.Logf("read len %d:", read_len)
-	t.Logf("req %v:", request)
-
-	// if read_len == 0 {
-	// 	break
-	// } else if string(request) == "timestamp" {
-	//daytime := time.Now().String()
-	//conn.Write([]byte(daytime))
-	// }
-	//		close(done)
-	//	}
-	//
-	//
-	//}
-
-	//go fnRead()
-
-	//<-done
 
 	ddd, _ := hex.DecodeString("0e69")
 	dec := NewDecoder(ddd)
@@ -177,21 +116,4 @@ func TestNewDecoder2(t *testing.T) {
 	format := decoder.decodeShort()
 	t.Logf("param: %v, value %v ", count, format)
 
-}
-
-type ClusterInfo struct {
-	UUID                       string `rac:"cluster"` // UUID cluster                    : 6d6958e1-a96c-4999-a995-698a0298161e
-	Host                       string // Host                          : Sport2
-	Port                       int    // Port                          : 1541
-	Name                       string // Name                          : "Новый кластер"
-	ExpirationTimeout          int    // ExpirationTimeout expiration-timeout            : 0
-	LifetimeLimit              int    // LifetimeLimit lifetime-limit                : 0
-	MaxMemorySize              int    // MaxMemorySize max-memory-size               : 0
-	MaxMemoryTimeLimit         int    // MaxMemoryTimeLimit max-memory-time-limit         : 0
-	SecurityLevel              int    // SecurityLevel security-level                : 0
-	SessionFaultToleranceLevel int    // SessionFaultToleranceLevel session-fault-tolerance-level : 0
-	LoadBalancingMode          int    // LoadBalancingMode load-balancing-mode           : performance
-	ErrorsCountThreshold       int    // ErrorsCountThreshold errors-count-threshold        : 0
-	KillProblemProcesses       bool   // KillProblemProcesses kill-problem-processes        : 0
-	KillByMemoryWithDump       bool   // KillByMemoryWithDump kill-by-memory-with-dump      : 0
 }

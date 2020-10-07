@@ -5,26 +5,27 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/satori/go.uuid"
+	"github.com/xelaj/go-dry"
 	"math"
 )
 
 const (
-	UTF8_CHARSET        = "UTF-8"
-	SIZEOF_SHORT        = 2
-	SIZEOF_             = 4
-	SIZEOF_LONG         = 8
-	NULL_BYTE      byte = 127
-	TRUE_BYTE           = 1
-	FALSE_BYTE          = 0
-	MAX_SHIFT           = 7
-	NULL_SHIFT          = 6
-	BYTE_MASK           = 255
-	NEXT_MASK           = -128
-	NULL_NEXT_MASK      = 64
-	LAST_MASK           = 0
-	NULL_LSB_MASK       = 63
-	LSB_MASK            = 127
-	TEMP_CAPACITY       = 256
+	UTF8_CHARSET   = "UTF-8"
+	SIZEOF_SHORT   = 2
+	SIZEOF_        = 4
+	SIZEOF_LONG    = 8
+	NULL_BYTE      = -128
+	TRUE_BYTE      = 1
+	FALSE_BYTE     = 0
+	MAX_SHIFT      = 7
+	NULL_SHIFT     = 6
+	BYTE_MASK      = 255
+	NEXT_MASK      = -128
+	NULL_NEXT_MASK = 64
+	LAST_MASK      = 0
+	NULL_LSB_MASK  = 63
+	LSB_MASK       = 127
+	TEMP_CAPACITY  = 256
 )
 
 type encoder struct {
@@ -115,7 +116,7 @@ func (e *encoder) encodeDouble(val float64) {
 
 func (e *encoder) encodeNull() {
 
-	_ = e.WriteByte(NULL_BYTE)
+	e.encodeInt(0x80) // NULL_BYTE
 
 }
 
@@ -129,6 +130,51 @@ func (e *encoder) encodeString(val string) {
 	b := []byte(val)
 	e.encodeNullableSize(len(b))
 	e.Write(b)
+
+}
+
+func (e *encoder) encodeTypedValue(val interface{}) {
+
+	if val == nil {
+		e.encodeNull()
+		return
+	}
+
+	ServiceWireType := detectType(val)
+	e.encodeType(MessageType(ServiceWireType))
+
+	switch ServiceWireType {
+
+	case BOOLEAN:
+		e.encodeBoolean(val.(bool))
+	case INT:
+		e.encodeInt(val.(int))
+	case LONG:
+		e.encodeLong(val.(int64))
+	case BYTE:
+		e.encodeByte(val.(byte))
+	default:
+		dry.PanicIf(true, "error encode typed value")
+	}
+
+}
+
+func detectType(val interface{}) ServiceWireType {
+
+	switch val.(type) {
+	case bool:
+		return BOOLEAN
+	case byte:
+		return BYTE
+	case int:
+		return INT
+	case int64:
+		return LONG
+	case uint64:
+		return LONG
+	default:
+		return BYTE
+	}
 
 }
 
@@ -195,13 +241,13 @@ func (e *encoder) encodeNullableSize(size int) {
 
 }
 
-func (e *encoder) encodeType(val byte) {
+func (e *encoder) encodeType(val MessageType) {
 
-	if val == NULL_BYTE {
+	if int(val) == NULL_BYTE {
 		e.encodeNull()
 		return
 	}
-	e.WriteByte(val)
+	e.WriteByte(byte(val))
 
 }
 
@@ -209,6 +255,10 @@ func (e *encoder) encodeByteArray(val []byte) {
 
 	e.Write(val)
 
+}
+
+func (e *encoder) encodeEndpointId(val int) {
+	e.encodeNullableSize(val)
 }
 
 type Decoder struct {
@@ -263,7 +313,10 @@ func (e *Decoder) decodeChar() uint16 {
 func (e *Decoder) decodeShort() uint16 {
 
 	buf := make([]byte, 2)
-	_, _ = e.Read(buf)
+
+	n, _ := e.Read(buf)
+	buf = buf[:n]
+
 	char := binary.BigEndian.Uint16(buf)
 	return char
 }
@@ -341,7 +394,7 @@ func (e *Decoder) decodeSize() int {
 
 func (e *Decoder) decodeNullableSize() int {
 	size := 0
-	ff := 0xFFFFFF80
+	//ff := 0xFFFFFF80
 	b1, _ := e.ReadByte()
 	cur := int(b1 & 0xFF)
 	if (cur & 0xFFFFFF80) == 0x0 {
@@ -349,13 +402,22 @@ func (e *Decoder) decodeNullableSize() int {
 		if cur&0x40 == 0x0 {
 			return size
 		}
-		for shift := NULL_SHIFT; (cur & ff) != 0x0; {
+
+		shift := NULL_SHIFT
+		b1, _ := e.ReadByte()
+		cur := int(b1 & 0xFF)
+		size += (cur & 0x7F) << NULL_SHIFT
+		shift += MAX_SHIFT
+
+		for (cur & 0xFFFFFF80) != 0x0 {
 
 			b1, _ = e.ReadByte()
 			cur = int(b1 & 0xFF)
 			size += (cur & 0x7F) << shift
 			shift += MAX_SHIFT
+
 		}
+		return size
 	}
 
 	if (cur & 0x7F) != 0x0 {
@@ -366,7 +428,7 @@ func (e *Decoder) decodeNullableSize() int {
 
 }
 
-func (e *Decoder) decodeType() int {
+func (e *Decoder) decodeType() MessageType {
 
 	ff := 0xFFFFFF80
 	b1, _ := e.ReadByte()
@@ -378,10 +440,10 @@ func (e *Decoder) decodeType() int {
 		if cur&0x7F != 0x0 {
 			panic("null expected")
 		}
-		return int(NULL_BYTE)
+		return NULL_TYPE
 	}
 
-	return cur
+	return MessageType(cur)
 
 }
 

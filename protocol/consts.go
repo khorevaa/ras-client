@@ -33,7 +33,8 @@ func getProtocolParameterName(parameterName string) string {
 type MessageType byte
 
 const (
-	NEGOTIATE         MessageType = 1
+	NEGOTIATE         MessageType = 0
+	CONNECT           MessageType = 1
 	CONNECT_ACK       MessageType = 2
 	START_TLS         MessageType = 3
 	DISCONNECT        MessageType = 4
@@ -49,22 +50,50 @@ const (
 	ENDPOINT_MESSAGE  MessageType = 14
 	ENDPOINT_FAILURE  MessageType = 15
 	KEEP_ALIVE        MessageType = 16
+
+	NULL_TYPE MessageType = 127
 )
+
+func (m MessageType) String() string {
+
+	switch m {
+
+	case CONNECT:
+		return "CONNECT"
+	case ENDPOINT_FAILURE:
+		return "ENDPOINT_FAILURE"
+	case ENDPOINT_MESSAGE:
+		return "ENDPOINT_MESSAGE"
+	case CONNECT_ACK:
+		return "CONNECT_ACK"
+	case ENDPOINT_CLOSE:
+		return "ENDPOINT_CLOSE"
+	default:
+		return "неизвестный тим ответа"
+	}
+
+}
 
 //public final class TypeCodes
 
+type ServiceWireType int
+
 const (
-	BOOLEAN       = 1
-	BYTE          = 2
-	SHORT         = 3
-	INT           = 4
-	LONG          = 5
-	FLOAT         = 6
-	DOUBLE        = 7
-	SIZE          = 8
-	NULLABLE_SIZE = 9
-	STRING        = 10
-	UUID          = 11
-	TYPE          = 12
-	ENDPOINT_ID   = 13
+	BOOLEAN       ServiceWireType = 1
+	BYTE                          = 2
+	SHORT                         = 3
+	INT                           = 4
+	LONG                          = 5
+	FLOAT                         = 6
+	DOUBLE                        = 7
+	SIZE                          = 8
+	NULLABLE_SIZE                 = 9
+	STRING                        = 10
+	UUID                          = 11
+	TYPE                          = 12
+	ENDPOINT_ID                   = 13
 )
+
+func (t ServiceWireType) raw() byte {
+	return byte(t)
+}
