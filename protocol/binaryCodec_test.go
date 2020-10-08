@@ -150,7 +150,7 @@ func TestNewDecoder2(t *testing.T) {
 //return msg;
 //}
 //default: {
-//throw new Error("Shouldn't reach here.");
+//throw new err("Shouldn't reach here.");
 //}
 //}
 //}

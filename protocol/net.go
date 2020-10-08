@@ -7,13 +7,15 @@ import (
 	"time"
 
 	bus "github.com/asaskevich/EventBus"
-	"github.com/k0kubun/pp"
+	//"github.com/k0kubun/pp"
 	"github.com/pkg/errors"
 	"github.com/xelaj/go-dry"
 )
 
 const readTimeout = time.Second * 15
 const magic = 475223888
+
+const maxChunkSizeResponse = 1460
 
 type RASConn struct {
 	addr         net.Addr
@@ -82,7 +84,6 @@ func (m *RASConn) CreateConnection() error {
 		"connect.timeout": int64(2000),
 	}}, ack)
 
-	pp.Println(ack)
 	return err
 }
 
@@ -116,8 +117,6 @@ func (m *RASConn) waitAck(resp []RespondMessage) (RespondMessage, error) {
 		}
 
 	case r := <-m.ackWait:
-
-		pp.Println(r)
 		return r, nil
 	}
 
@@ -126,7 +125,7 @@ func (m *RASConn) waitAck(resp []RespondMessage) (RespondMessage, error) {
 
 func (m *RASConn) sendPacket(request []byte, resp []RespondMessage) (RespondMessage, error) {
 
-	pp.Println("writing message", request)
+	//pp.Println("writing message", request)
 	_, err := m.conn.Write(request)
 	if err != nil {
 		return nil, errors.Wrap(err, "sending request")
@@ -152,24 +151,46 @@ func (m *RASConn) SendRequest(req RequestMessage, resp ...RespondMessage) (Respo
 	return r, err
 }
 
-func (m *RASConn) SendEndpointRequest(req RequestMessage, resp ...RespondMessage) (RespondMessage, error) {
+func (m *RASConn) SendEndpointMessage(req RequestMessage, resp ...RespondMessage) (*EndpointMessage, error) {
 
 	if m.Endpoint == nil || m.EndpointClosed {
-		return nullRespondMessage{}, errors.New("endpoint is in active")
+		return nil, errors.New("endpoint is in active")
 	}
 
 	endpointMessage := &EndpointMessage{}
-	endpointMessage.addResponse(resp...)
 
-	waitResp := []RespondMessage{endpointMessage, &EndpointFeature{}}
+	if len(resp) > 0 {
+		endpointMessage.WaitResponse(resp[0])
+	}
 
-	body := m.formatEndpointRequestMessage(req, VOID_MESSAGE_KIND)
+	waitResp := []RespondMessage{endpointMessage, &EndpointFailure{}}
+
+	body := m.formatEndpointRequestMessage(req, MESSAGE_KIND)
 
 	requestData := formatMessageType(ENDPOINT_MESSAGE, body)
 
 	r, err := m.sendPacket(requestData, waitResp)
 
-	return r, err
+	if err != nil {
+		return nil, err
+	}
+
+	switch typed := r.(type) {
+
+	case *EndpointFailure:
+		return nil, typed
+	case *EndpointMessage:
+
+		err := endpointMessage.err
+
+		if err != nil {
+			return endpointMessage, err
+		}
+
+		return endpointMessage, nil
+	}
+
+	return nil, errors.New("неизвестный тип ответа на сообщение")
 }
 
 func formatRequestMessage(req RequestMessage) []byte {
@@ -305,14 +326,32 @@ func (m *RASConn) readFromConn(ctx context.Context) (reso rawRespond, err error)
 
 	dec := NewDecoder(header)
 	messageType := dec.decodeType()
-
-	pp.Println("messageType", messageType)
 	size := dec.decodeSize()
-	pp.Println("count", size)
 
 	data := make([]byte, size)
-	reader := dry.NewCancelableReader(ctx, m.conn)
-	n, err = reader.Read(data)
+
+	if size > maxChunkSizeResponse {
+
+		n = 0
+
+		for size-n > 0 {
+
+			buf := make([]byte, maxChunkSizeResponse)
+			offset := n
+			nReaded, err := m.conn.Read(buf)
+			dry.PanicIfErr(err)
+			copy(data[offset:offset+nReaded], buf[:nReaded])
+
+			n += nReaded
+
+		}
+	} else {
+		reader := dry.NewCancelableReader(ctx, m.conn)
+
+		n, err = reader.Read(data)
+
+	}
+
 	dry.PanicIfErr(err)
 	dry.PanicIf(n != int(size), "expected read "+strconv.Itoa(int(size))+" bytes, got "+strconv.Itoa(n))
 

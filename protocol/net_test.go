@@ -28,19 +28,29 @@ func TestRASConn_CreateConnection(t *testing.T) {
 
 	pp.Println(resp)
 
-	err = conn.AuthenticateAgent("", "")
-	dry.PanicIfErr(err)
+	//err = conn.AuthenticateAgent("", "")
+	//dry.PanicIfErr(err)
 
 	resp2, err := conn.GetClusters()
+
 	dry.PanicIfErr(err)
 
 	pp.Println(resp2)
 
 	id, _ := uuid.FromString(resp2[0].UUID)
 
-	r, err := conn.GetClusterManagers(id)
+	err = conn.AuthenticateCluster(id, "", "")
+
 	dry.PanicIfErr(err)
 
-	pp.Println(r)
+	//r, err := conn.GetClusterManagers(id)
+	//dry.PanicIfErr(err)
+	//
+	//pp.Println(r)
+
+	r2, err := conn.GetClusterConnections(id)
+	dry.PanicIfErr(err)
+
+	pp.Println(r2)
 
 }

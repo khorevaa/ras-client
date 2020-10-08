@@ -1,9 +1,7 @@
 package protocol
 
 import (
-	"github.com/k0kubun/pp"
 	uuid "github.com/satori/go.uuid"
-	"github.com/xelaj/go-dry"
 )
 
 const DefaultFormat = 256
@@ -12,7 +10,7 @@ func (m *RASConn) OpenEndpointByVersion(version string) (RespondMessage, error) 
 
 	resp, err := m.SendRequest(&OpenEndpointMessage{
 		Version: version,
-	}, &OpenEndpointMessageAck{}, &EndpointFeature{})
+	}, &OpenEndpointMessageAck{}, &EndpointFailure{})
 
 	return resp, err
 }
@@ -21,7 +19,7 @@ func (m *RASConn) OpenEndpoint(version string) (RespondMessage, error) {
 
 	resp, err := m.SendRequest(&OpenEndpointMessage{
 		Version: version,
-	}, &OpenEndpointMessageAck{}, &EndpointFeature{})
+	}, &OpenEndpointMessageAck{}, &EndpointFailure{})
 
 	switch r := resp.(type) {
 
@@ -42,15 +40,17 @@ func (m *RASConn) OpenEndpoint(version string) (RespondMessage, error) {
 func (m *RASConn) GetClusters() ([]*ClusterInfo, error) {
 
 	response := GetClustersResponse{}
-	resp, err := m.SendEndpointRequest(&GetClustersRequest{}, &response)
+	resp, err := m.SendEndpointMessage(&GetClustersRequest{}, &response)
 
-	dry.PanicIfErr(err)
+	if err != nil {
+		return nil, err
+	}
 
-	pp.Println(resp)
+	//dry.PanicIfErr(err)
 
-	endpointMessage := resp.(*EndpointMessage)
+	//pp.Println(resp)
 
-	message := endpointMessage.Respond[response.Type()]
+	message := resp.waitResponse
 
 	r := message.(*GetClustersResponse)
 
@@ -59,34 +59,63 @@ func (m *RASConn) GetClusters() ([]*ClusterInfo, error) {
 
 func (m *RASConn) AuthenticateAgent(user, password string) error {
 
-	_, err := m.SendEndpointRequest(&AuthenticateAgentRequest{
+	_, err := m.SendEndpointMessage(&AuthenticateAgentRequest{
 		user:     user,
 		password: password,
 	})
 
-	dry.PanicIfErr(err)
+	return err
+}
+
+func (m *RASConn) AuthenticateCluster(uuid uuid.UUID, user, password string) error {
+
+	_, err := m.SendEndpointMessage(&ClusterAuthenticateRequest{
+		ID:       uuid,
+		user:     user,
+		password: password,
+	})
 
 	return err
 }
 
-func (m *RASConn) GetClusterManagers(id uuid.UUID) ([]*ClusterInfo, error) {
+func (m *RASConn) GetClusterManagers(id uuid.UUID) ([]*ManagerInfo, error) {
 
 	response := GetClusterManagersResponse{}
-	resp, err := m.SendEndpointRequest(&GetClusterManagersRequest{
+	_, err := m.SendEndpointMessage(&GetClusterManagersRequest{
 		ID: id,
 	}, &response)
 
-	dry.PanicIfErr(err)
+	return response.Managers, err
+}
 
-	pp.Println(resp)
+func (m *RASConn) GetClusterServices(id uuid.UUID) ([]*ServiceInfo, error) {
 
-	endpointMessage := resp.(*EndpointMessage)
+	response := GetClusterServicesResponse{}
+	_, err := m.SendEndpointMessage(GetClusterServicesRequest{
+		ID: id,
+	}, &response)
 
-	message := endpointMessage.Respond[response.Type()]
+	return response.Services, err
+}
 
-	_ = message.(*GetClusterManagersResponse)
+func (m *RASConn) GetClusterInfobases(id uuid.UUID) ([]*InfobaseInfo, error) {
 
-	return nil, err
+	response := GetInfobasesShortResponse{}
+	_, err := m.SendEndpointMessage(GetInfobasesShortRequest{
+		ID: id,
+	}, &response)
+
+	return response.Infobases, err
+}
+
+func (m *RASConn) GetClusterConnections(id uuid.UUID) ([]*ConnectionInfo, error) {
+
+	response := GetConnectionsShortResponse{}
+	_, err := m.SendEndpointMessage(GetConnectionsShortRequest{
+		ID: id,
+	}, &response)
+
+	return response.Connections, err
 }
 
 type ClusterInfo struct {

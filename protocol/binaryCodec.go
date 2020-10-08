@@ -299,9 +299,11 @@ func (e *Decoder) decodeSlice(size int) [][]byte {
 	var parts [][]byte
 	part := make([]byte, size)
 
-	for n, err := e.Read(part); n == size && err != nil; {
+	for n, err := e.Read(part); n == size && err == nil; {
 
 		parts = append(parts, part)
+
+		//part = make([]byte, size)
 
 	}
 
@@ -310,7 +312,10 @@ func (e *Decoder) decodeSlice(size int) [][]byte {
 
 func (e *Decoder) decodeUnsignedByte() byte {
 
-	b, _ := e.ReadByte()
+	b, err := e.ReadByte()
+
+	dry.PanicIfErr(err, e)
+
 	return b
 }
 
@@ -375,7 +380,9 @@ func (e *Decoder) decodeString() string {
 		return ""
 	}
 	buf := make([]byte, size)
-	_, _ = e.Read(buf)
+	_, err := e.Read(buf)
+
+	dry.PanicIfErr(err, buf)
 
 	return string(buf)
 
