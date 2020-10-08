@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"github.com/k0kubun/pp"
 	uuid "github.com/satori/go.uuid"
 	"time"
 )
@@ -508,23 +507,19 @@ func (r *GetConnectionsShortResponse) Parse(body []byte) error {
 
 	count := decoder.decodeSize()
 
-	sl := decoder.decodeSlice(len(body) / count)
-	pp.Println(sl)
-
 	for i := 0; i < count; i++ {
 
 		info := &ConnectionInfo{}
 		info.UUID = decoder.decodeUUID().String()
 		info.Application = decoder.decodeString()
 		info.BlockedByLs = decoder.decodeInt()
+		info.ID = int32(decoder.decodeInt())
 		info.ConnectedAt = time.Unix(decoder.decodeLong(), 0)
-		info.ID = int32(decoder.decodeShort())
-		pp.Println(decoder.decodeLong())
-		info.Host = decoder.decodeString()
-
-		info.Infobase = decoder.decodeUUID().String()
-		info.Process = decoder.decodeUUID().String()
 		info.SessionID = decoder.decodeInt()
+		info.Host = decoder.decodeString()
+		info.Infobase = decoder.decodeUUID().String()
+
+		info.Process = decoder.decodeUUID().String()
 		//_ = decoder.decodeByte()
 
 		r.Connections = append(r.Connections, info)
