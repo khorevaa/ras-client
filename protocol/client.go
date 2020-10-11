@@ -22,7 +22,7 @@ const magic = 475223888
 const protocolVersion = 256
 const maxResponseChunkSize = 1460
 
-type RASConn struct {
+type Client struct {
 	addr  string
 	laddr net.Addr
 	conn  net.Conn
@@ -30,7 +30,7 @@ type RASConn struct {
 	ctx          context.Context
 	stopRoutines context.CancelFunc // остановить ping, read, и подобные горутины
 
-	// каналы, которые ожидают ответа rpc. ответ записывается в канал и удаляется
+	// каналы, которые ожидают ответа rpc
 	ackRespond chan ackRespond
 
 	responses chan rawResponse
@@ -45,9 +45,9 @@ type RASConn struct {
 	bus bus.Bus
 }
 
-func NewRASConn(addr string) *RASConn {
+func NewClient(addr string) *Client {
 
-	m := new(RASConn)
+	m := new(Client)
 	m.addr = addr
 
 	m.ackRespond = make(chan ackRespond)
@@ -57,58 +57,58 @@ func NewRASConn(addr string) *RASConn {
 	return m
 }
 
-func (m *RASConn) CreateConnection() error {
+func (c *Client) CreateConnection() error {
 
-	_, err := net.ResolveTCPAddr("tcp", m.addr)
+	_, err := net.ResolveTCPAddr("tcp", c.addr)
 	if err != nil {
 		return errors.Wrap(err, "resolving tcp")
 	}
 
-	m.conn, err = net.Dial("tcp", m.addr)
+	c.conn, err = net.Dial("tcp", c.addr)
 	if err != nil {
 		return errors.Wrap(err, "dialing tcp")
 	}
-	m.laddr = m.conn.LocalAddr()
+	c.laddr = c.conn.LocalAddr()
 
 	ctx, cancelfunc := context.WithCancel(context.Background())
-	m.stopRoutines = cancelfunc
-	m.ctx = ctx
+	c.stopRoutines = cancelfunc
+	c.ctx = ctx
 
 	// start reading responses from the server
-	m.startReadingResponses(ctx)
+	c.startReadingResponses(ctx)
 
 	// start keepalive pinging
-	m.startRoutingResponses(ctx)
+	c.startRoutingResponses(ctx)
 
-	_, err = m.SendRequest(NewNegotiateMessage(protocolVersion, m.codec.Version()))
+	_, err = c.SendRequest(NewNegotiateMessage(protocolVersion, c.codec.Version()))
 
 	if err != nil {
 		return err
 	}
 
-	_, err = m.SendRequest(&ConnectMessage{params: map[string]interface{}{
+	_, err = c.SendRequest(&ConnectMessage{params: map[string]interface{}{
 		"connect.timeout": int64(2000),
 	}})
 
 	return err
 }
 
-func (m *RASConn) SendRequest(req types.RequestMessage) (interface{}, error) {
+func (c *Client) SendRequest(req types.RequestMessage) (interface{}, error) {
 
 	buf := NewBuffer()
-	err := m.formatRequestMessage(req, buf)
+	err := c.formatRequestMessage(req, buf)
 	if err != nil {
 		return nil, err
 	}
 
-	err = m.sendPacket(buf)
+	err = c.sendPacket(buf)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if req.ResponseMessage() != nil {
-		resp, err := m.waitAck(req)
+		resp, err := c.waitAck(req)
 
 		return resp, err
 	}
@@ -117,11 +117,11 @@ func (m *RASConn) SendRequest(req types.RequestMessage) (interface{}, error) {
 
 }
 
-func (m *RASConn) Disconnect() error {
+func (c *Client) Disconnect() error {
 	// stop all routines
-	m.stopRoutines()
+	c.stopRoutines()
 
-	err := m.conn.Close()
+	err := c.conn.Close()
 	if err != nil {
 		return errors.Wrap(err, "closing TCP connection")
 	}
@@ -148,20 +148,20 @@ func newAckRespond(req types.RequestMessage, wait chan interface{}) ackRespond {
 
 }
 
-func (m *RASConn) resetAck() {
-	m.ackRespond = make(chan ackRespond)
+func (c *Client) resetAck() {
+	c.ackRespond = make(chan ackRespond)
 }
 
 // waitAck добавляет в список id сообщения, которому нужно подтверждение
 // возвращает true, если ранее этого id не было
-func (m *RASConn) waitAck(req types.RequestMessage) (interface{}, error) {
+func (c *Client) waitAck(req types.RequestMessage) (interface{}, error) {
 
 	wait := make(chan interface{})
-	m.ackRespond <- newAckRespond(req, wait)
+	c.ackRespond <- newAckRespond(req, wait)
 
 	select {
-	case <-m.ctx.Done():
-		return nil, m.ctx.Err()
+	case <-c.ctx.Done():
+		return nil, c.ctx.Err()
 	case resp := <-wait:
 
 		switch typed := resp.(type) {
@@ -179,16 +179,16 @@ func (m *RASConn) waitAck(req types.RequestMessage) (interface{}, error) {
 
 }
 
-func (m *RASConn) sendPacket(request *bytes.Buffer) error {
+func (c *Client) sendPacket(request *bytes.Buffer) error {
 
-	_, err := request.WriteTo(m.conn)
+	_, err := request.WriteTo(c.conn)
 	if err != nil {
 		return errors.Wrap(err, "sending ack")
 	}
 	return nil
 }
 
-func (m *RASConn) formatRequestMessage(req types.RequestMessage, buf *bytes.Buffer) (err error) {
+func (c *Client) formatRequestMessage(req types.RequestMessage, buf *bytes.Buffer) (err error) {
 
 	defer func() {
 		if e := recover(); e != nil {
@@ -206,7 +206,7 @@ func (m *RASConn) formatRequestMessage(req types.RequestMessage, buf *bytes.Buff
 		}
 	}()
 
-	e := m.codec.Encoder()
+	e := c.codec.Encoder()
 
 	switch req.Type() {
 
@@ -229,7 +229,7 @@ func (m *RASConn) formatRequestMessage(req types.RequestMessage, buf *bytes.Buff
 	return
 }
 
-func (m *RASConn) startReadingResponses(ctx context.Context) {
+func (c *Client) startReadingResponses(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -238,30 +238,30 @@ func (m *RASConn) startReadingResponses(ctx context.Context) {
 
 			default:
 
-				rawResp, err := m.readFromConn(ctx)
+				rawResp, err := c.readFromConn(ctx)
 				if err != nil {
 					pp.Errorf("error while reading from connection")
 					continue
 				}
 
-				m.responses <- rawResp
+				c.responses <- rawResp
 
 			}
 		}
 	}()
 }
 
-func (m *RASConn) readFromConn(ctx context.Context) (reso rawResponse, err error) {
+func (c *Client) readFromConn(ctx context.Context) (reso rawResponse, err error) {
 
-	//m.conn.SetReadDeadline(readTimeout)
+	//c.conn.SetReadDeadline(readTimeout)
 
 	header := make([]byte, 256)
-	n, err := m.conn.Read(header)
+	n, err := c.conn.Read(header)
 	dry.PanicIfErr(err)
 	header = header[:n]
 
 	buf := bytes.NewReader(header)
-	dec := m.codec.Decoder()
+	dec := c.codec.Decoder()
 	messageType := dec.Type(buf)
 	size := dec.Size(buf)
 
@@ -275,7 +275,7 @@ func (m *RASConn) readFromConn(ctx context.Context) (reso rawResponse, err error
 
 			buf := make([]byte, maxResponseChunkSize)
 			offset := n
-			nReaded, err := m.conn.Read(buf)
+			nReaded, err := c.conn.Read(buf)
 			dry.PanicIfErr(err)
 			copy(data[offset:offset+nReaded], buf[:nReaded])
 
@@ -283,7 +283,7 @@ func (m *RASConn) readFromConn(ctx context.Context) (reso rawResponse, err error
 
 		}
 	} else {
-		reader := dry.NewCancelableReader(ctx, m.conn)
+		reader := dry.NewCancelableReader(ctx, c.conn)
 
 		n, err = reader.Read(data)
 
@@ -301,19 +301,19 @@ func (m *RASConn) readFromConn(ctx context.Context) (reso rawResponse, err error
 	return resp, nil // TODO Переделать на возврат сообщения
 }
 
-func (m *RASConn) startRoutingResponses(ctx context.Context) {
+func (c *Client) startRoutingResponses(ctx context.Context) {
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case res := <-m.responses:
+			case res := <-c.responses:
 
 				switch res.t {
 
 				case ENDPOINT_MESSAGE:
 
-					m.receiveEndpointMessage(res)
+					c.receiveEndpointMessage(res)
 
 				case ENDPOINT_FAILURE:
 
@@ -327,7 +327,7 @@ func (m *RASConn) startRoutingResponses(ctx context.Context) {
 					// Nothing to do
 				default:
 
-					m.receiveResponse(res)
+					c.receiveResponse(res)
 				}
 
 			}
@@ -335,16 +335,16 @@ func (m *RASConn) startRoutingResponses(ctx context.Context) {
 	}()
 }
 
-func (m *RASConn) receiveResponse(raw rawResponse) {
+func (c *Client) receiveResponse(raw rawResponse) {
 
-	if len(m.ackRespond) == 0 {
+	if len(c.ackRespond) == 0 {
 		return
 	}
 
-	ack := <-m.ackRespond
+	ack := <-c.ackRespond
 
 	resp := ack.req.ResponseMessage()
-	d := m.codec.Decoder()
+	d := c.codec.Decoder()
 	r := bytes.NewReader(raw.payload)
 
 	switch raw.Type().Type() {
@@ -388,22 +388,22 @@ func tryParse(p types.ResponseMessage, decoder codec.Decoder, r io.Reader) (err 
 	return
 }
 
-func (m *RASConn) registryNewEndpoint(ack *OpenEndpointMessageAck) types.Endpoint {
+func (c *Client) registryNewEndpoint(ack *OpenEndpointMessageAck) types.Endpoint {
 
-	end := newEndpoint(m, ack.EndpointID, ack.ServiceID, ack.Version)
+	end := newEndpoint(c, ack.EndpointID, ack.ServiceID, ack.Version)
 
-	m.endpoints[end.Id] = end
+	c.endpoints[end.Id] = end
 	return end
 }
 
-func (m *RASConn) receiveEndpointMessage(res rawResponse) {
+func (c *Client) receiveEndpointMessage(res rawResponse) {
 
-	d := m.codec.Decoder()
+	d := c.codec.Decoder()
 	r := bytes.NewReader(res.payload)
 	endpointID := d.EndpointId(r)
 	_ = d.Short(r) // Format уже записан в точке
 
-	receiver, ok := m.endpoints[endpointID]
+	receiver, ok := c.endpoints[endpointID]
 
 	if !ok {
 

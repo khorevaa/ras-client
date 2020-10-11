@@ -4,22 +4,24 @@ import (
 	"errors"
 	"github.com/k0kubun/pp"
 	uuid "github.com/satori/go.uuid"
+	"github.com/v8platform/rac/protocol/messages"
 	"github.com/v8platform/rac/protocol/types"
+	"github.com/v8platform/rac/serialize"
 )
 
 const DefaultFormat = 256
 
 var serviceVersions = []string{"3.0", "4.0", "5.0", "6.0", "7.0", "8.0", "9.0", "10.0"}
 
-func (m *RASConn) NewEndpoint() (types.Endpoint, error) {
+func (c *Client) NewEndpoint() (types.Endpoint, error) {
 
-	if len(m.serviceVersion) > 0 {
-		return m.OpenEndpoint(m.serviceVersion)
+	if len(c.serviceVersion) > 0 {
+		return c.OpenEndpoint(c.serviceVersion)
 	}
 
 	version := serviceVersions[len(serviceVersions)-1]
 
-	end, err := m.OpenEndpoint(version)
+	end, err := c.OpenEndpoint(version)
 
 	if err != nil {
 
@@ -28,21 +30,21 @@ func (m *RASConn) NewEndpoint() (types.Endpoint, error) {
 			return nil, errors.New(pp.Sprint("ras no supported service version", serviceVersions))
 		}
 
-		m.serviceVersion = supportedVersion
+		c.serviceVersion = supportedVersion
 
-		return m.OpenEndpoint(m.serviceVersion)
+		return c.OpenEndpoint(c.serviceVersion)
 
 	}
 
-	m.serviceVersion = version
+	c.serviceVersion = version
 
 	return end, err
 }
 
-func (m *RASConn) OpenEndpoint(version string) (types.Endpoint, error) {
+func (c *Client) OpenEndpoint(version string) (types.Endpoint, error) {
 
 	ack := &OpenEndpointMessageAck{}
-	_, err := m.SendRequest(&OpenEndpointMessage{
+	_, err := c.SendRequest(&OpenEndpointMessage{
 		Version: version,
 		ack:     ack,
 	})
@@ -51,14 +53,14 @@ func (m *RASConn) OpenEndpoint(version string) (types.Endpoint, error) {
 		return nil, err
 	}
 
-	end := m.registryNewEndpoint(ack)
+	end := c.registryNewEndpoint(ack)
 
 	return end, nil
 }
 
-func (e *endpoint) GetClusters() ([]*ClusterInfo, error) {
+func (e *endpoint) GetClusters() ([]*serialize.ClusterInfo, error) {
 
-	req := &GetClustersRequest{}
+	req := &messages.GetClustersRequest{}
 	_, err := e.SendMessage(req)
 
 	if err != nil {
@@ -72,9 +74,9 @@ func (e *endpoint) GetClusters() ([]*ClusterInfo, error) {
 
 func (e *endpoint) AuthenticateAgent(user, password string) error {
 
-	_, err := e.SendMessage(&AuthenticateAgentRequest{
-		user:     user,
-		password: password,
+	_, err := e.SendMessage(&messages.AuthenticateAgentRequest{
+		User:     user,
+		Password: password,
 	})
 
 	return err
@@ -82,18 +84,18 @@ func (e *endpoint) AuthenticateAgent(user, password string) error {
 
 func (e *endpoint) AuthenticateCluster(uuid uuid.UUID, user, password string) error {
 
-	_, err := e.SendMessage(&ClusterAuthenticateRequest{
-		ID:       uuid,
-		user:     user,
-		password: password,
+	_, err := e.SendMessage(&messages.ClusterAuthenticateRequest{
+		ClusterID: uuid,
+		User:      user,
+		Password:  password,
 	})
 
 	return err
 }
 
-func (e *endpoint) GetClusterManagers(id uuid.UUID) ([]*ManagerInfo, error) {
+func (e *endpoint) GetClusterManagers(id uuid.UUID) ([]*serialize.ManagerInfo, error) {
 
-	req := &GetClusterManagersRequest{ID: id}
+	req := &messages.GetClusterManagersRequest{ClusterID: id}
 	_, err := e.SendMessage(req)
 
 	response := req.Response()
@@ -101,9 +103,9 @@ func (e *endpoint) GetClusterManagers(id uuid.UUID) ([]*ManagerInfo, error) {
 	return response.Managers, err
 }
 
-func (e *endpoint) GetClusterServices(id uuid.UUID) ([]*ServiceInfo, error) {
+func (e *endpoint) GetClusterServices(id uuid.UUID) ([]*serialize.ServiceInfo, error) {
 
-	req := GetClusterServicesRequest{ID: id}
+	req := messages.GetClusterServicesRequest{ClusterID: id}
 	_, err := e.SendMessage(&req)
 
 	response := req.Response()
@@ -111,38 +113,20 @@ func (e *endpoint) GetClusterServices(id uuid.UUID) ([]*ServiceInfo, error) {
 	return response.Services, err
 }
 
-func (e *endpoint) GetClusterInfobases(id uuid.UUID) ([]*InfobaseInfo, error) {
+func (e *endpoint) GetClusterInfobases(id uuid.UUID) ([]*serialize.InfobaseSummaryInfo, error) {
 
-	req := GetInfobasesShortRequest{ID: id}
+	req := messages.GetInfobasesShortRequest{ClusterID: id}
 	_, err := e.SendMessage(req)
 	response := req.Response()
 	return response.Infobases, err
 }
 
-func (e *endpoint) GetClusterConnections(id uuid.UUID) ([]*ConnectionInfo, error) {
+func (e *endpoint) GetClusterConnections(id uuid.UUID) (serialize.ConnectionInfoList, error) {
 
-	req := GetConnectionsShortRequest{ID: id}
+	req := messages.GetConnectionsShortRequest{ID: id}
 	_, err := e.SendMessage(&req)
 
 	response := req.Response()
 
 	return response.Connections, err
-}
-
-type ClusterInfo struct {
-	UUID                       uuid.UUID `rac:"cluster"` // UUID cluster                    : 6d6958e1-a96c-4999-a995-698a0298161e
-	Host                       string    // Host                          : Sport2
-	Port                       int16     // Port                          : 1541
-	Name                       string    // Name                          : "Новый кластер"
-	ExpirationTimeout          int       // ExpirationTimeout expiration-timeout            : 0
-	LifetimeLimit              int       // LifetimeLimit lifetime-limit                : 0
-	MaxMemorySize              int       // MaxMemorySize max-memory-count               : 0
-	MaxMemoryTimeLimit         int       // MaxMemoryTimeLimit max-memory-time-limit         : 0
-	SecurityLevel              int       // SecurityLevel security-level                : 0
-	SessionFaultToleranceLevel int       // SessionFaultToleranceLevel session-fault-tolerance-level : 0
-	LoadBalancingMode          int       // LoadBalancingMode load-balancing-Mode           : performance
-	ErrorsCountThreshold       int       // ErrorsCountThreshold errors-count-threshold        : 0
-	KillProblemProcesses       bool      // KillProblemProcesses kill-problem-processes        : 0
-	KillByMemoryWithDump       bool      // KillByMemoryWithDump kill-by-memory-with-dump      : 0
-	LifeTimeLimit              int
 }

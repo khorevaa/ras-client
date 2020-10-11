@@ -6,13 +6,14 @@ import (
 	"errors"
 	"github.com/k0kubun/pp"
 	"github.com/v8platform/rac/protocol/codec"
+	"github.com/v8platform/rac/protocol/messages"
 	"github.com/v8platform/rac/protocol/types"
 	"io"
 	"strconv"
 )
 
 type endpoint struct {
-	conn      *RASConn
+	conn      *Client
 	Id        int
 	serviceID string
 	version   string
@@ -31,7 +32,7 @@ func (e *endpoint) Close() {
 	panic("implement me")
 }
 
-func newEndpoint(conn *RASConn, id int, serviceID string, version string) *endpoint {
+func newEndpoint(conn *Client, id int, serviceID string, version string) *endpoint {
 
 	end := &endpoint{
 		conn:      conn,
@@ -133,19 +134,19 @@ func (e *endpoint) tryParse(t types.Typed, p codec.BinaryParser, r io.Reader) (e
 
 	decoder := e.codec.Decoder()
 
-	kind := EndpointMessageKind(decoder.Type(r))
+	kind := messages.EndpointMessageKind(decoder.Type(r))
 
 	switch kind {
 
-	case VOID_MESSAGE_KIND:
+	case messages.VOID_MESSAGE_KIND:
 		return
-	case EXCEPTION_KIND:
+	case messages.EXCEPTION_KIND:
 
 		fail := &EndpointMessageFailure{EndpointID: e.Id}
 		fail.Parse(decoder, r)
 		return fail
 
-	case MESSAGE_KIND:
+	case messages.MESSAGE_KIND:
 
 		respondType := decoder.Type(r)
 
@@ -154,7 +155,7 @@ func (e *endpoint) tryParse(t types.Typed, p codec.BinaryParser, r io.Reader) (e
 			return
 		}
 
-		p.Parse(decoder, e, r)
+		p.Parse(decoder, e.Version(), r)
 	}
 
 	return
@@ -222,7 +223,7 @@ func (m *EndpointMessageFailure) Error() string {
 
 type EndpointMessage struct {
 	endpoint *endpoint
-	kind     EndpointMessageKind
+	kind     types.Typed
 
 	bufReader *bytes.Reader
 	req       types.EndpointRequestMessage
@@ -248,13 +249,13 @@ func (m *EndpointMessage) String() string {
 	return pp.Sprintln(m)
 }
 
-func (m *EndpointMessage) Format(e codec.Encoder, w io.Writer) {
+func (m *EndpointMessage) Format(encoder codec.Encoder, w io.Writer) {
 
-	e.EndpointId(m.endpoint.Id, w)
-	e.Short(m.endpoint.format, w)
-	e.Type(m.Type(), w) // МАГИЯ без этого байта требует авторизации на центральном кластере
-	e.Type(m.kind, w)
+	encoder.EndpointId(m.endpoint.Id, w)
+	encoder.Short(m.endpoint.format, w)
+	encoder.Type(m.Type(), w) // МАГИЯ без этого байта требует авторизации на центральном кластере
+	encoder.Type(m.kind, w)
 
-	m.req.Format(e, m.endpoint, w) // запись тебя сообщения
+	m.req.Format(encoder, m.endpoint.Version(), w) // запись тебя сообщения
 
 }

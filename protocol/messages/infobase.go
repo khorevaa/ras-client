@@ -14,12 +14,12 @@ import (
 //  kind MESSAGE_KIND = 1
 //  respond GetInfobasesShortResponse
 type GetInfobasesShortRequest struct {
-	ID       uuid.UUID
-	response *GetInfobasesShortResponse
+	ClusterID uuid.UUID
+	response  *GetInfobasesShortResponse
 }
 
 func (r GetInfobasesShortRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
-	encoder.Uuid(r.ID, w)
+	encoder.Uuid(r.ClusterID, w)
 }
 
 func (_ GetInfobasesShortRequest) Kind() types.Typed {

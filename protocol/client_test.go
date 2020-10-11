@@ -10,7 +10,7 @@ import (
 
 func TestRASConn_CreateConnection(t *testing.T) {
 
-	conn, err := NewRASConn("srv-uk-app22:1545")
+	conn, err := NewClient("srv-uk-app22:1545")
 
 	//conn, err := net.Dial("tcp", "srv-uk-app22:1545")
 	if err != nil {

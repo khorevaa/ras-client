@@ -67,3 +67,32 @@ func (res *GetConnectionsShortResponse) Parse(decoder codec.Decoder, version int
 	res.Connections = list
 
 }
+
+// DisconnectConnectionRequest отключение соединения
+//
+//  type DISCONNECT_REQUEST = 59
+//  kind MESSAGE_KIND = 1
+//  respond nothing
+type DisconnectConnectionRequest struct {
+	ClusterID    uuid.UUID
+	ProcessID    uuid.UUID
+	ConnectionID uuid.UUID
+}
+
+func (_ *DisconnectConnectionRequest) Kind() types.Typed {
+	return MESSAGE_KIND
+}
+
+func (_ *DisconnectConnectionRequest) Type() types.Typed {
+	return DISCONNECT_REQUEST
+}
+
+func (_ DisconnectConnectionRequest) ResponseMessage() types.EndpointResponseMessage {
+	return nullEndpointResponse()
+}
+
+func (r *DisconnectConnectionRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+	encoder.Uuid(r.ClusterID, w)
+	encoder.Uuid(r.ProcessID, w)
+	encoder.Uuid(r.ConnectionID, w)
+}

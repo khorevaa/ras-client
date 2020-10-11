@@ -6,7 +6,7 @@ import (
 )
 
 type Endpoint interface {
-	Version() string
+	Version() int
 
 	SendMessage(req EndpointRequestMessage) (interface{}, error)
 	Close()
