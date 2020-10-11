@@ -3,6 +3,7 @@ package protocol
 import (
 	"encoding/hex"
 	"github.com/k0kubun/pp"
+	"io/ioutil"
 
 	"testing"
 )
@@ -120,6 +121,26 @@ func TestNewDecoder2(t *testing.T) {
 
 }
 
+func TestNewDecoder3(t *testing.T) {
+
+	data2, _ := hex.DecodeString(connectionsData)
+
+	decoder := NewDecoder(data2)
+	//m.raw = body
+	endpointID := decoder.decodeEndpointId()
+	format := int(decoder.decodeShort())
+	kind := EndpointMessageKind(decoder.decodeByte())
+	respondType := EndpointMessageType(decoder.decodeUnsignedByte())
+
+	pp.Println(endpointID, format, kind, respondType)
+
+	respBody, _ := ioutil.ReadAll(decoder) ///Читаем то что осталось
+
+	parser := &GetConnectionsShortResponse{}
+	parser.Parse(respBody)
+
+}
+
 //
 //protected Object decode(final ChannelHandlerContext ctx, final Channel channel, final ChannelBuffer buffer, final MessageDecoderState state) throws Exception {
 //if (buffer.readableBytes() == 0) {
@@ -155,8 +176,8 @@ func TestNewDecoder2(t *testing.T) {
 //}
 //}
 //
-//private IServiceWireMessage parseMessage(final MessageType type, final ChannelBuffer buffer) throws Exception {
-//if (type == MessageType.ENDPOINT_MESSAGE) {
+//private IServiceWireMessage parseMessage(final Type type, final ChannelBuffer buffer) throws Exception {
+//if (type == Type.ENDPOINT_MESSAGE) {
 //final EndpointId endpointId = this.codec.decodeEndpointId(buffer);
 //final short format = this.codec.decodeShort(buffer);
 //return (IServiceWireMessage)new EndpointMessage(endpointId, format, buffer.slice());

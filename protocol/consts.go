@@ -28,11 +28,7 @@ func getProtocolParameterName(parameterName string) string {
 	return "nipple.swp.protocol." + parameterName
 }
 
-//public enum MessageType
-
-type MessageType interface {
-	Type() int
-}
+//public enum Type
 
 type ConnectionMessageType int
 

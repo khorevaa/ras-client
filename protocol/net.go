@@ -1,7 +1,12 @@
 package protocol
 
 import (
+	"bytes"
 	"context"
+	"github.com/k0kubun/pp"
+	"github.com/v8platform/rac/protocol/codec"
+	"github.com/v8platform/rac/protocol/types"
+	"io"
 	"net"
 	"strconv"
 	"time"
@@ -14,51 +19,52 @@ import (
 
 const readTimeout = time.Second * 15
 const magic = 475223888
-
-const maxChunkSizeResponse = 1460
+const protocolVersion = 256
+const maxResponseChunkSize = 1460
 
 type RASConn struct {
-	addr         net.Addr
-	laddr        net.Addr
-	conn         net.Conn
-	packetConn   net.PacketConn
+	addr  string
+	laddr net.Addr
+	conn  net.Conn
+
+	ctx          context.Context
 	stopRoutines context.CancelFunc // остановить ping, read, и подобные горутины
 
-	// ключ авторизации. изменять можно только через setAuthKey
-	authKey []byte
-
-	// хеш ключа авторизации. изменять можно только через setAuthKey
-	authKeyHash []byte
-
 	// каналы, которые ожидают ответа rpc. ответ записывается в канал и удаляется
-	ackRespond   chan map[MessageType]RespondMessage
-	ackWait      chan RespondMessage
-	ackWaitError chan error
+	ackRespond chan ackRespond
 
-	Endpoint       *Endpoint
-	EndpointClosed bool
+	responses chan rawResponse
+	endpoints map[int]*endpoint
+
+	codec codec.Codec
+
+	serviceVersion string
 
 	// шина соо
 	//бщений, используется для разных нотификаций, описанных в константах нотификации
 	bus bus.Bus
 }
 
-func NewRASConn(addr string) (*RASConn, error) {
+func NewRASConn(addr string) *RASConn {
+
 	m := new(RASConn)
-	m.addr, _ = net.ResolveTCPAddr("tcp", addr)
-	m.ackRespond = make(chan map[MessageType]RespondMessage)
+	m.addr = addr
+
+	m.ackRespond = make(chan ackRespond)
+	m.codec = codec.NewCodec1_0()
 	m.resetAck()
-	return m, nil
+
+	return m
 }
 
 func (m *RASConn) CreateConnection() error {
-	// connect
-	tcpAddr, err := net.ResolveTCPAddr("tcp", m.addr.String())
+
+	_, err := net.ResolveTCPAddr("tcp", m.addr)
 	if err != nil {
 		return errors.Wrap(err, "resolving tcp")
 	}
 
-	m.conn, err = net.Dial("tcp", tcpAddr.String())
+	m.conn, err = net.Dial("tcp", m.addr)
 	if err != nil {
 		return errors.Wrap(err, "dialing tcp")
 	}
@@ -66,187 +72,49 @@ func (m *RASConn) CreateConnection() error {
 
 	ctx, cancelfunc := context.WithCancel(context.Background())
 	m.stopRoutines = cancelfunc
+	m.ctx = ctx
 
 	// start reading responses from the server
 	m.startReadingResponses(ctx)
 
 	// start keepalive pinging
-	m.startPinging(ctx)
+	m.startRoutingResponses(ctx)
 
-	err = m.VoidRequest(NewNegotiateMessage(256, 256))
+	_, err = m.SendRequest(NewNegotiateMessage(protocolVersion, m.codec.Version()))
 
 	if err != nil {
 		return err
 	}
-	ack := &ConnectMessageAck{}
 
 	_, err = m.SendRequest(&ConnectMessage{params: map[string]interface{}{
 		"connect.timeout": int64(2000),
-	}}, ack)
+	}})
 
 	return err
 }
 
-func (m *RASConn) resetAck() {
-	m.ackWait = make(chan RespondMessage, 1)
-	m.ackWaitError = make(chan error, 1)
-}
+func (m *RASConn) SendRequest(req types.RequestMessage) (interface{}, error) {
 
-// waitAck добавляет в список id сообщения, которому нужно подтверждение
-// возвращает true, если ранее этого id не было
-func (m *RASConn) waitAck(resp []RespondMessage) (RespondMessage, error) {
-
-	if resp == nil || len(resp) == 0 {
-		return &nullRespondMessage{}, nil
-	}
-
-	ackRespond := make(map[MessageType]RespondMessage)
-
-	for _, message := range resp {
-		ackRespond[message.Type()] = message
-	}
-
-	m.ackRespond <- ackRespond
-
-	select {
-
-	case err := <-m.ackWaitError:
-
-		if err != nil {
-			return nil, err
-		}
-
-	case r := <-m.ackWait:
-		return r, nil
-	}
-
-	return nil, nil
-}
-
-func (m *RASConn) sendPacket(request []byte, resp []RespondMessage) (RespondMessage, error) {
-
-	//pp.Println("writing message", request)
-	_, err := m.conn.Write(request)
+	buf := NewBuffer()
+	err := m.formatRequestMessage(req, buf)
 	if err != nil {
-		return nil, errors.Wrap(err, "sending request")
+		return nil, err
 	}
 
-	return m.waitAck(resp)
-}
-
-func (m *RASConn) VoidRequest(req RequestMessage) (err error) {
-
-	requestData := formatRequestMessage(req)
-	_, err = m.sendPacket(requestData, nil)
-
-	return err
-}
-
-func (m *RASConn) SendRequest(req RequestMessage, resp ...RespondMessage) (RespondMessage, error) {
-
-	requestData := formatRequestMessage(req)
-
-	r, err := m.sendPacket(requestData, resp)
-
-	return r, err
-}
-
-func (m *RASConn) SendEndpointMessage(req RequestMessage, resp ...RespondMessage) (*EndpointMessage, error) {
-
-	if m.Endpoint == nil || m.EndpointClosed {
-		return nil, errors.New("endpoint is in active")
-	}
-
-	endpointMessage := &EndpointMessage{}
-
-	if len(resp) > 0 {
-		endpointMessage.WaitResponse(resp[0])
-	}
-
-	waitResp := []RespondMessage{endpointMessage, &EndpointFailure{}}
-
-	body := m.formatEndpointRequestMessage(req, MESSAGE_KIND)
-
-	requestData := formatMessageType(ENDPOINT_MESSAGE, body)
-
-	r, err := m.sendPacket(requestData, waitResp)
+	err = m.sendPacket(buf)
 
 	if err != nil {
 		return nil, err
 	}
 
-	switch typed := r.(type) {
+	if req.ResponseMessage() != nil {
+		resp, err := m.waitAck(req)
 
-	case *EndpointFailure:
-		return nil, typed
-	case *EndpointMessage:
-
-		err := endpointMessage.err
-
-		if err != nil {
-			return endpointMessage, err
-		}
-
-		return endpointMessage, nil
+		return resp, err
 	}
 
-	return nil, errors.New("неизвестный тип ответа на сообщение")
-}
+	return nil, err
 
-func formatRequestMessage(req RequestMessage) []byte {
-
-	switch req.Type() {
-
-	case NEGOTIATE:
-		enc := NewEncoder()
-		req.Format(enc)
-		return enc.Bytes()
-
-	default:
-
-		enc := NewEncoder()
-		req.Format(enc)
-		body := enc.Bytes()
-		return formatMessageType(req.Type(), body)
-
-	}
-}
-
-func (m *RASConn) formatEndpointRequestMessage(req RequestMessage, kind EndpointMessageKind) []byte {
-
-	enc := NewEncoder()
-	req.Format(enc)
-	body := enc.Bytes()
-
-	enc = NewEncoder()
-
-	enc.encodeEndpointId(m.Endpoint.Id)
-	enc.encodeShort(m.Endpoint.Fornat)
-	enc.encodeByte(byte(kind))
-
-	enc.encodeType(req.Type()) // МАГИЯ без этого байта требует авторизации на центральном кластере
-
-	header := enc.Bytes()
-
-	buf := make([]byte, len(header)+len(body))
-	copy(buf, header)
-	copy(buf[len(header):], body)
-
-	return buf
-
-}
-
-func formatMessageType(mType MessageType, body []byte) []byte {
-
-	enc := NewEncoder()
-	enc.encodeType(mType)
-	enc.encodeSize(len(body))
-	header := enc.Bytes()
-
-	buf := make([]byte, len(header)+len(body))
-	copy(buf, header)
-	copy(buf[len(header):], body)
-	return buf
 }
 
 func (m *RASConn) Disconnect() error {
@@ -266,21 +134,99 @@ func (m *RASConn) Disconnect() error {
 	return nil
 }
 
-// startPinging пингует сервер что все хорошо, клиент в сети
-// нужно просто запустить
-func (m *RASConn) startPinging(ctx context.Context) {
-	ticker := time.Tick(60 * time.Second)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker:
-				//_, err := m.Ping(0xCADACADA)
-				//dry.PanicIfErr(err)
+type ackRespond struct {
+	req  types.RequestMessage
+	wait chan interface{}
+}
+
+func newAckRespond(req types.RequestMessage, wait chan interface{}) ackRespond {
+
+	return ackRespond{
+		req:  req,
+		wait: wait,
+	}
+
+}
+
+func (m *RASConn) resetAck() {
+	m.ackRespond = make(chan ackRespond)
+}
+
+// waitAck добавляет в список id сообщения, которому нужно подтверждение
+// возвращает true, если ранее этого id не было
+func (m *RASConn) waitAck(req types.RequestMessage) (interface{}, error) {
+
+	wait := make(chan interface{})
+	m.ackRespond <- newAckRespond(req, wait)
+
+	select {
+	case <-m.ctx.Done():
+		return nil, m.ctx.Err()
+	case resp := <-wait:
+
+		switch typed := resp.(type) {
+
+		case error:
+
+			return nil, typed
+
+		default:
+
+			return typed, nil
+
+		}
+	}
+
+}
+
+func (m *RASConn) sendPacket(request *bytes.Buffer) error {
+
+	_, err := request.WriteTo(m.conn)
+	if err != nil {
+		return errors.Wrap(err, "sending ack")
+	}
+	return nil
+}
+
+func (m *RASConn) formatRequestMessage(req types.RequestMessage, buf *bytes.Buffer) (err error) {
+
+	defer func() {
+		if e := recover(); e != nil {
+			switch val := e.(type) {
+
+			case string:
+
+				err = errors.New(val)
+
+			case error:
+				err = val
+			default:
+				panic(e)
 			}
 		}
 	}()
+
+	e := m.codec.Encoder()
+
+	switch req.Type() {
+
+	case NEGOTIATE:
+
+		req.Format(e, buf)
+
+	default:
+
+		body := NewBuffer()
+		req.Format(e, body)
+
+		e.Type(req.Type(), buf)
+		e.Size(body.Len(), buf)
+
+		_, err = body.WriteTo(buf)
+
+	}
+
+	return
 }
 
 func (m *RASConn) startReadingResponses(ctx context.Context) {
@@ -289,54 +235,45 @@ func (m *RASConn) startReadingResponses(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case ack := <-m.ackRespond:
+
+			default:
 
 				rawResp, err := m.readFromConn(ctx)
-
 				if err != nil {
-					m.ackWaitError <- err
-					return
+					pp.Errorf("error while reading from connection")
+					continue
 				}
 
-				parser, ok := ack[rawResp.Type()]
-				if !ok {
-					m.ackWaitError <- errors.New("got unsupporsed type")
-					return
-				}
-
-				err = parser.Parse(rawResp.Data())
-				if err != nil {
-					m.ackWaitError <- err
-					return
-				}
-
-				m.ackWait <- parser
+				m.responses <- rawResp
 
 			}
 		}
 	}()
 }
 
-func (m *RASConn) readFromConn(ctx context.Context) (reso rawRespond, err error) {
+func (m *RASConn) readFromConn(ctx context.Context) (reso rawResponse, err error) {
+
+	//m.conn.SetReadDeadline(readTimeout)
 
 	header := make([]byte, 256)
 	n, err := m.conn.Read(header)
 	dry.PanicIfErr(err)
 	header = header[:n]
 
-	dec := NewDecoder(header)
-	messageType := dec.decodeType()
-	size := dec.decodeSize()
+	buf := bytes.NewReader(header)
+	dec := m.codec.Decoder()
+	messageType := dec.Type(buf)
+	size := dec.Size(buf)
 
 	data := make([]byte, size)
 
-	if size > maxChunkSizeResponse {
+	if size > maxResponseChunkSize {
 
 		n = 0
 
 		for size-n > 0 {
 
-			buf := make([]byte, maxChunkSizeResponse)
+			buf := make([]byte, maxResponseChunkSize)
 			offset := n
 			nReaded, err := m.conn.Read(buf)
 			dry.PanicIfErr(err)
@@ -355,7 +292,7 @@ func (m *RASConn) readFromConn(ctx context.Context) (reso rawRespond, err error)
 	dry.PanicIfErr(err)
 	dry.PanicIf(n != int(size), "expected read "+strconv.Itoa(int(size))+" bytes, got "+strconv.Itoa(n))
 
-	resp := rawRespond{
+	resp := rawResponse{
 		ConnectionMessageType(messageType),
 		size,
 		data,
@@ -364,52 +301,154 @@ func (m *RASConn) readFromConn(ctx context.Context) (reso rawRespond, err error)
 	return resp, nil // TODO Переделать на возврат сообщения
 }
 
-type rawRespond struct {
-	t       MessageType
+func (m *RASConn) startRoutingResponses(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case res := <-m.responses:
+
+				switch res.t {
+
+				case ENDPOINT_MESSAGE:
+
+					m.receiveEndpointMessage(res)
+
+				case ENDPOINT_FAILURE:
+
+					panic(pp.Sprintln(res))
+
+				case KEEP_ALIVE:
+
+					pp.Println(KEEP_ALIVE)
+
+				case NULL_TYPE:
+					// Nothing to do
+				default:
+
+					m.receiveResponse(res)
+				}
+
+			}
+		}
+	}()
+}
+
+func (m *RASConn) receiveResponse(raw rawResponse) {
+
+	if len(m.ackRespond) == 0 {
+		return
+	}
+
+	ack := <-m.ackRespond
+
+	resp := ack.req.ResponseMessage()
+	d := m.codec.Decoder()
+	r := bytes.NewReader(raw.payload)
+
+	switch raw.Type().Type() {
+
+	case resp.Type().Type():
+
+		err := tryParse(resp, d, r)
+
+		if err != nil {
+			ack.wait <- err
+			return
+		}
+
+		ack.wait <- resp
+
+	default:
+		return
+
+	}
+}
+
+func tryParse(p types.ResponseMessage, decoder codec.Decoder, r io.Reader) (err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			switch val := e.(type) {
+
+			case string:
+
+				err = errors.New(val)
+
+			case error:
+				err = val
+			default:
+				panic(e)
+			}
+		}
+	}()
+
+	p.Parse(decoder, r)
+
+	return
+}
+
+func (m *RASConn) registryNewEndpoint(ack *OpenEndpointMessageAck) types.Endpoint {
+
+	end := newEndpoint(m, ack.EndpointID, ack.ServiceID, ack.Version)
+
+	m.endpoints[end.Id] = end
+	return end
+}
+
+func (m *RASConn) receiveEndpointMessage(res rawResponse) {
+
+	d := m.codec.Decoder()
+	r := bytes.NewReader(res.payload)
+	endpointID := d.EndpointId(r)
+	_ = d.Short(r) // Format уже записан в точке
+
+	receiver, ok := m.endpoints[endpointID]
+
+	if !ok {
+
+		pp.Println("Не удалось определить точку получения сообщения", endpointID)
+		return
+	}
+
+	message := EndpointMessage{
+		endpoint:  receiver,
+		bufReader: r,
+	}
+
+	receiver.PushMessage(message)
+
+}
+
+type rawResponse struct {
+	t       types.Typed
 	size    int
 	payload []byte
 }
 
-func (r rawRespond) Type() MessageType {
+func (r rawResponse) Type() types.Typed {
 	return r.t
 }
 
-func (r rawRespond) Len() int {
+func (r rawResponse) Len() int {
 	return r.size
 }
 
-func (r rawRespond) Size() int {
+func (r rawResponse) Size() int {
 	return r.size
 }
 
-func (r rawRespond) Data() []byte {
+func (r rawResponse) Data() []byte {
 	return r.payload
-}
-
-type RequestMessage interface {
-	Type() MessageType
-	Format(enc *encoder)
-}
-
-type RespondMessage interface {
-	Parse(body []byte) error
-	Type() MessageType
 }
 
 type nullRespondMessage struct {
 }
 
-func (_ nullRespondMessage) Parse(_ []byte) error {
-	return nil
+func (_ nullRespondMessage) Parse(_ codec.Decoder, _ io.Reader) {
+
 }
 
-func (_ nullRespondMessage) Type() MessageType {
+func (_ nullRespondMessage) Type() types.Typed {
 	return NULL_TYPE
-}
-
-type Endpoint struct {
-	Id        int
-	ServiceID string
-	Version   string
-	Fornat    int
 }

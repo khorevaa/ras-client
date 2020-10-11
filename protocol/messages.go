@@ -1,10 +1,10 @@
 package protocol
 
 import (
-	"errors"
 	"github.com/k0kubun/pp"
-	"github.com/xelaj/go-dry"
-	"io/ioutil"
+	"github.com/v8platform/rac/protocol/codec"
+	"github.com/v8platform/rac/protocol/types"
+	"io"
 )
 
 type EndpointMessageKind int
@@ -23,44 +23,50 @@ type ConnectMessageAck struct {
 	data []byte
 }
 
-func (r *ConnectMessageAck) Type() MessageType {
+func (r *ConnectMessageAck) Type() types.Typed {
 	return CONNECT_ACK
 }
 
-func (r *ConnectMessageAck) Parse(body []byte) error {
-
-	r.data = body
-
-	return nil
+func (r *ConnectMessageAck) Parse(codec codec.Decoder, w io.Reader) {
 
 }
 
 type ConnectMessage struct {
-	params map[string]interface{}
+	params   map[string]interface{}
+	response *ConnectMessageAck
+}
+
+func (m *ConnectMessage) ResponseMessage() types.ResponseMessage {
+
+	if m.response == nil {
+		m.response = &ConnectMessageAck{}
+	}
+
+	return m.response
 }
 
 func (m *ConnectMessage) String() string {
 	return ""
 }
 
-func (m *ConnectMessage) Type() MessageType {
+func (m *ConnectMessage) Type() types.Typed {
 	return CONNECT
 }
 
-func (m ConnectMessage) Format(enc *encoder) {
+func (m ConnectMessage) Format(c codec.Encoder, w io.Writer) {
 
 	size := len(m.params)
 	if size == 0 {
-		enc.encodeNull()
+		c.Null(w)
 		return
 	}
 
-	enc.encodeNullableSize(size)
+	c.NullableSize(size, w)
 
 	for key, value := range m.params {
 
-		enc.encodeString(key)
-		enc.encodeTypedValue(value)
+		c.String(key, w)
+		c.TypedValue(value, w)
 
 	}
 
@@ -68,23 +74,27 @@ func (m ConnectMessage) Format(enc *encoder) {
 
 type NegotiateMessage struct {
 	magic           int
-	ProtocolVersion int
-	CodecVersion    int
+	ProtocolVersion int16
+	CodecVersion    int16
 }
 
-func (n NegotiateMessage) Type() MessageType {
+func (n NegotiateMessage) ResponseMessage() types.ResponseMessage {
+	return &nullRespondMessage{}
+}
+
+func (n NegotiateMessage) Type() types.Typed {
 	return NEGOTIATE
 }
 
-func (n NegotiateMessage) Format(enc *encoder) {
+func (n NegotiateMessage) Format(c codec.Encoder, w io.Writer) {
 
-	enc.encodeInt(n.magic)
-	enc.encodeShort(n.ProtocolVersion)
-	enc.encodeShort(n.ProtocolVersion)
+	c.Int(n.magic, w)
+	c.Short(n.ProtocolVersion, w)
+	c.Short(n.ProtocolVersion, w)
 
 }
 
-func NewNegotiateMessage(protocol, codec int) NegotiateMessage {
+func NewNegotiateMessage(protocol, codec int16) NegotiateMessage {
 	return NegotiateMessage{
 		magic:           magic,
 		ProtocolVersion: protocol,
@@ -99,32 +109,41 @@ type OpenEndpointMessage struct {
 	Encoding string
 	Version  string
 	params   map[string]interface{}
+	ack      *OpenEndpointMessageAck
 }
 
 func (m *OpenEndpointMessage) String() string {
-	return ""
+	return pp.Sprintln(m)
 }
 
-func (m *OpenEndpointMessage) Type() MessageType {
+func (m *OpenEndpointMessage) Type() types.Typed {
 	return ENDPOINT_OPEN
 }
+func (m *OpenEndpointMessage) ResponseMessage() types.ResponseMessage {
 
-func (m OpenEndpointMessage) Format(enc *encoder) {
+	if m.ack == nil {
+		m.ack = &OpenEndpointMessageAck{}
+	}
 
-	enc.encodeString(endpointPrefix)
-	enc.encodeString(m.Version)
+	return m.ack
+}
+
+func (m OpenEndpointMessage) Format(c codec.Encoder, w io.Writer) {
+
+	c.String(endpointPrefix, w)
+	c.String(m.Version, w)
 	size := len(m.params)
 	if size == 0 {
-		enc.encodeNull()
+		c.Null(w)
 		return
 	}
 
-	enc.encodeNullableSize(size)
+	c.NullableSize(size, w)
 
 	for key, value := range m.params {
 
-		enc.encodeString(key)
-		enc.encodeTypedValue(value)
+		c.String(key, w)
+		c.TypedValue(value, w)
 
 	}
 
@@ -138,44 +157,23 @@ type OpenEndpointMessageAck struct {
 	params map[string]interface{}
 }
 
-func (m *OpenEndpointMessageAck) Parse(body []byte) error {
-	//panic("implement me")
+func (m *OpenEndpointMessageAck) Parse(c codec.Decoder, r io.Reader) {
 
-	dec := NewDecoder(body)
-	m.ServiceID = dec.decodeString()
-	m.Version = dec.decodeString()
-	m.EndpointID = dec.decodeEndpointId()
+	c.StringPtr(&m.ServiceID, r)
+	c.StringPtr(&m.Version, r)
+
+	m.EndpointID = c.EndpointId(r)
 
 	// TODO params
 
-	return nil
 }
 
 func (m *OpenEndpointMessageAck) String() string {
-	return ""
+	return pp.Sprintln(m)
 }
 
-func (m *OpenEndpointMessageAck) Type() MessageType {
+func (m *OpenEndpointMessageAck) Type() types.Typed {
 	return ENDPOINT_OPEN_ACK
-}
-
-func (m OpenEndpointMessageAck) Format(enc *encoder) {
-
-	size := len(m.params)
-	if size == 0 {
-		enc.encodeNull()
-		return
-	}
-
-	enc.encodeNullableSize(size)
-
-	for key, value := range m.params {
-
-		enc.encodeString(key)
-		enc.encodeTypedValue(value)
-
-	}
-
 }
 
 type EndpointFailure struct {
@@ -197,19 +195,19 @@ func (e *causeError) Error() string {
 
 }
 
-func (m *EndpointFailure) Parse(body []byte) error {
+func (m *EndpointFailure) Parse(c codec.Decoder, r io.Reader) {
 
-	dec := NewDecoder(body)
-	m.ServiceID = dec.decodeString()
-	m.Version = dec.decodeString()
+	c.StringPtr(&m.ServiceID, r)
+	c.StringPtr(&m.Version, r)
 
-	m.EndpointID = dec.decodeEndpointId()
-	classError := dec.decodeString()
+	m.EndpointID = c.EndpointId(r)
+
+	classError := c.String(r)
 
 	pp.Printf(classError)
 
-	errMessage := dec.decodeString()
-	errSize := dec.decodeSize()
+	errMessage := c.String(r)
+	errSize := c.Size(r)
 
 	pp.Printf(errMessage, errSize)
 
@@ -219,22 +217,20 @@ func (m *EndpointFailure) Parse(body []byte) error {
 
 	}
 
-	causeService := dec.decodeString()
-	causeMessage := dec.decodeString()
+	causeService := c.String(r)
+	causeMessage := c.String(r)
 
 	m.err = &causeError{
 		service: causeService,
 		msg:     causeMessage,
 	}
-
-	return nil
 }
 
 func (m *EndpointFailure) String() string {
 	return m.err.Error()
 }
 
-func (m *EndpointFailure) Type() MessageType {
+func (m *EndpointFailure) Type() types.Typed {
 	return ENDPOINT_FAILURE
 }
 
@@ -243,121 +239,122 @@ func (m *EndpointFailure) Error() string {
 	return m.err.Error()
 }
 
-type EndpointMessageFailure struct {
-	ServiceID  string
-	Message    string
-	EndpointID int
-}
+//
+//type EndpointMessageFailure struct {
+//	serviceID  string
+//	Message    string
+//	EndpointID int
+//}
+//
+//func (m *EndpointMessageFailure) Parse(body []byte) error {
+//
+//	dec := NewDecoder(body)
+//	m.serviceID = dec.decodeString()
+//	m.Message = dec.decodeString()
+//
+//	respBody, err := ioutil.ReadAll(dec) ///Читаем то что осталось
+//
+//	if err != nil {
+//		return err
+//	}
+//
+//	pp.Println("EndpointMessageFailure", respBody)
+//
+//	return nil
+//}
+//
+//func (m *EndpointMessageFailure) String() string {
+//	return m.Message
+//}
+//
+//func (m *EndpointMessageFailure) Type() Typed {
+//	return EXCEPTION_KIND
+//}
+//
+//func (m *EndpointMessageFailure) Error() string {
+//	return pp.Sprintf("endpoint: %s service: %s msg: %s", m.EndpointID, m.serviceID, m.Message)
+//}
 
-func (m *EndpointMessageFailure) Parse(body []byte) error {
-
-	dec := NewDecoder(body)
-	m.ServiceID = dec.decodeString()
-	m.Message = dec.decodeString()
-
-	respBody, err := ioutil.ReadAll(dec) ///Читаем то что осталось
-
-	if err != nil {
-		return err
-	}
-
-	pp.Println("EndpointMessageFailure", respBody)
-
-	return nil
-}
-
-func (m *EndpointMessageFailure) String() string {
-	return m.Message
-}
-
-func (m *EndpointMessageFailure) Type() MessageType {
-	return EXCEPTION_KIND
-}
-
-func (m *EndpointMessageFailure) Error() string {
-	return pp.Sprintf("endpoint: %s service: %s msg: %s", m.EndpointID, m.ServiceID, m.Message)
-}
-
-type EndpointMessage struct {
-	raw []byte
-
-	endpointID int
-	format     int
-
-	kind EndpointMessageKind
-
-	respondType  MessageType
-	waitResponse RespondMessage
-	err          *EndpointMessageFailure
-}
-
-func (m *EndpointMessage) WaitResponse(r RespondMessage) {
-
-	m.waitResponse = r
-
-}
-
-func (m *EndpointMessage) Parse(body []byte) error {
-
-	decoder := NewDecoder(body)
-	m.raw = body
-	m.endpointID = decoder.decodeEndpointId()
-	m.format = int(decoder.decodeShort())
-	m.kind = EndpointMessageKind(decoder.decodeByte())
-
-	switch m.kind {
-
-	case VOID_MESSAGE_KIND:
-		return nil
-	case EXCEPTION_KIND:
-
-		respBody, err := ioutil.ReadAll(decoder) ///Читаем то что осталось
-
-		if err != nil {
-			return err
-		}
-
-		m.err = &EndpointMessageFailure{EndpointID: m.endpointID}
-		err = m.err.Parse(respBody)
-
-		if err != nil {
-			return err
-		}
-
-	case MESSAGE_KIND:
-
-		m.respondType = EndpointMessageType(decoder.decodeUnsignedByte())
-
-		respBody, err := ioutil.ReadAll(decoder) ///Читаем то что осталось
-
-		if err != nil {
-			return err
-		}
-
-		if m.respondType != m.waitResponse.Type() {
-			return errors.New("не совпадает ожидаем и тип полученныго ответа")
-		}
-
-		err = m.waitResponse.Parse(respBody)
-		if err != nil {
-			return err
-		}
-
-	default:
-		dry.PanicIf(true, "неизвестный тип сообщения ответа")
-	}
-
-	return nil
-}
-
-func (m *EndpointMessage) String() string {
-	return ""
-}
-
-func (m *EndpointMessage) Type() MessageType {
-	return ENDPOINT_MESSAGE
-}
-
-func (m EndpointMessage) Format(enc *encoder) {
-
-}
+//type EndpointMessage struct {
+//	raw []byte
+//
+//	endpointID int
+//	format     int
+//
+//	kind EndpointMessageKind
+//
+//	respondType  Typed
+//	waitResponse ResponseMessage
+//	err          *EndpointMessageFailure
+//}
+//
+//func (m *EndpointMessage) WaitResponse(r ResponseMessage) {
+//
+//	m.waitResponse = r
+//
+//}
+//
+//func (m *EndpointMessage) Parse(body []byte) error {
+//
+//	decoder := NewDecoder(body)
+//	m.raw = body
+//	m.endpointID = decoder.decodeEndpointId()
+//	m.format = int(decoder.decodeShort())
+//	m.kind = EndpointMessageKind(decoder.decodeByte())
+//
+//	switch m.kind {
+//
+//	case VOID_MESSAGE_KIND:
+//		return nil
+//	case EXCEPTION_KIND:
+//
+//		respBody, err := ioutil.ReadAll(decoder) ///Читаем то что осталось
+//
+//		if err != nil {
+//			return err
+//		}
+//
+//		m.err = &EndpointMessageFailure{EndpointID: m.endpointID}
+//		err = m.err.Parse(respBody)
+//
+//		if err != nil {
+//			return err
+//		}
+//
+//	case MESSAGE_KIND:
+//
+//		m.respondType = EndpointMessageType(decoder.decodeUnsignedByte())
+//
+//		respBody, err := ioutil.ReadAll(decoder) ///Читаем то что осталось
+//
+//		if err != nil {
+//			return err
+//		}
+//
+//		if m.respondType != m.waitResponse.Type() {
+//			return errors.New("не совпадает ожидаем и тип полученныго ответа")
+//		}
+//
+//		err = m.waitResponse.Parse(respBody)
+//		if err != nil {
+//			return err
+//		}
+//
+//	default:
+//		dry.PanicIf(true, "неизвестный тип сообщения ответа")
+//	}
+//
+//	return nil
+//}
+//
+//func (m *EndpointMessage) String() string {
+//	return ""
+//}
+//
+//func (m *EndpointMessage) Type() Typed {
+//	return ENDPOINT_MESSAGE
+//}
+//
+//func (m EndpointMessage) Format(enc *encoder) {
+//
+//}

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/satori/go.uuid"
+	"github.com/v8platform/rac/protocol/types"
 	"github.com/xelaj/go-dry"
 	"math"
 )
@@ -241,7 +242,7 @@ func (e *encoder) encodeNullableSize(size int) {
 
 }
 
-func (e *encoder) encodeType(val MessageType) {
+func (e *encoder) encodeType(val types.Typed) {
 
 	if int(val.Type()) == NULL_BYTE {
 		e.encodeNull()
@@ -364,6 +365,7 @@ func (e *Decoder) decodeUint() uint32 {
 func (e *Decoder) decodeLong() int64 {
 
 	buf := make([]byte, 8)
+	_, _ = e.Read(buf)
 	char := binary.BigEndian.Uint64(buf)
 	return int64(char)
 }
