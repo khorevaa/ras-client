@@ -67,7 +67,7 @@ type NegotiateMessage struct {
 }
 
 func (n NegotiateMessage) ResponseMessage() types.ResponseMessage {
-	return &nullRespondMessage{}
+	return nil
 }
 
 func (n NegotiateMessage) Type() types.Typed {
@@ -78,7 +78,7 @@ func (n NegotiateMessage) Format(c codec.Encoder, w io.Writer) {
 
 	c.Int(n.magic, w)
 	c.Short(n.ProtocolVersion, w)
-	c.Short(n.ProtocolVersion, w)
+	c.Short(n.CodecVersion, w)
 
 }
 

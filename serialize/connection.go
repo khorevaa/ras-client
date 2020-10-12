@@ -8,17 +8,20 @@ import (
 
 type ConnectionInfoList []ConnectionInfo
 
-func (l ConnectionInfoList) Parse(decoder Decoder, version int, r io.Reader) {
+func (l *ConnectionInfoList) Parse(decoder Decoder, version int, r io.Reader) {
 
 	count := decoder.Size(r)
+	var ls ConnectionInfoList
 
 	for i := 0; i < count; i++ {
 
 		info := &ConnectionInfo{}
 		info.Parse(decoder, version, r)
 
-		l = append(l, *info)
+		ls = append(ls, *info)
 	}
+
+	*l = ls
 }
 
 type ConnectionInfo struct {

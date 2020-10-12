@@ -1,7 +1,8 @@
 package messages
 
+const NULL_ENDPOINT_RESPONSE EndpointMessageType = -1
+
 const (
-	NULL_ENDPOINT_RESPONSE   EndpointMessageType = -1
 	GET_AGENT_ADMINS_REQUEST EndpointMessageType = iota
 	GET_AGENT_ADMINS_RESPONSE
 	GET_CLUSTER_ADMINS_REQUEST

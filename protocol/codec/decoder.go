@@ -87,11 +87,11 @@ func (e *decoder) Short(r io.Reader) int16 {
 }
 
 func (e *decoder) IntPtr(ptr *int, r io.Reader) {
-	panic("implement me")
+	*ptr = e.Int(r)
 }
 
 func (e *decoder) Int(r io.Reader) int {
-	panic("implement me")
+	return int(e.Uint32(r))
 }
 
 func (e *decoder) Uint16Ptr(ptr *uint16, r io.Reader) {
@@ -102,7 +102,6 @@ func (e *decoder) Uint16(r io.Reader) uint16 {
 
 	buf := make([]byte, 2)
 	e.read(r, buf)
-	//buf = buf[:n]
 
 	val := binary.BigEndian.Uint16(buf)
 	return val
@@ -294,18 +293,18 @@ func (e *decoder) NullableSize(r io.Reader) int {
 const NULL_TYPE = 127
 
 func (e *decoder) Type(r io.Reader) int {
-	ff := 0xFFFFFF80
+	//ff := 0xFFFFFF80
 	b1 := e.readByte(r)
 
 	cur := int(b1 & 0xFF)
 
-	if cur&ff != 0x0 {
-
-		if cur&0x7F != 0x0 {
-			panic("null expected")
-		}
-		return NULL_TYPE
-	}
+	//if cur&ff != 0x0 {
+	//
+	//	if cur&0x7F != 0x0 {
+	//		panic("decoder: Type -> null type expected")
+	//	}
+	//	return NULL_TYPE
+	//}
 
 	return cur
 }

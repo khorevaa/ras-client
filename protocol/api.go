@@ -9,8 +9,6 @@ import (
 	"github.com/v8platform/rac/serialize"
 )
 
-const DefaultFormat = 256
-
 var serviceVersions = []string{"3.0", "4.0", "5.0", "6.0", "7.0", "8.0", "9.0", "10.0"}
 
 func (c *Client) NewEndpoint() (types.Endpoint, error) {

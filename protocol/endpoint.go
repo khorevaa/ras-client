@@ -12,6 +12,8 @@ import (
 	"strconv"
 )
 
+const defaultFormat = 256
+
 type endpoint struct {
 	conn      *Client
 	Id        int
@@ -39,9 +41,10 @@ func newEndpoint(conn *Client, id int, serviceID string, version string) *endpoi
 		Id:        id,
 		serviceID: serviceID,
 		version:   version,
-		format:    0,
+		format:    defaultFormat,
 		codec:     conn.codec,
 		messages:  make(chan EndpointMessage),
+		wait:      make(chan chan EndpointMessage),
 		opened:    true,
 		ctx:       conn.ctx,
 	}
@@ -83,7 +86,7 @@ func (e *endpoint) SendMessage(req types.EndpointRequestMessage) (interface{}, e
 		return nil, err
 	}
 
-	if req.Kind() == VOID_MESSAGE_KIND {
+	if req.Kind() == messages.VOID_MESSAGE_KIND {
 		return nil, err
 	}
 
@@ -182,10 +185,10 @@ func (e *endpoint) processMessages(ctx context.Context) {
 				return
 			case message := <-e.messages:
 
-				if len(e.wait) == 0 {
-					pp.Println(message)
-					return
-				}
+				//if len(e.wait) == 0 {
+				//	pp.Println(message)
+				//	return
+				//}
 
 				wait := <-e.wait
 				wait <- message
@@ -214,7 +217,7 @@ func (m *EndpointMessageFailure) String() string {
 }
 
 func (m *EndpointMessageFailure) Type() types.Typed {
-	return EXCEPTION_KIND
+	return messages.EXCEPTION_KIND
 }
 
 func (m *EndpointMessageFailure) Error() string {
@@ -252,9 +255,10 @@ func (m *EndpointMessage) String() string {
 func (m *EndpointMessage) Format(encoder codec.Encoder, w io.Writer) {
 
 	encoder.EndpointId(m.endpoint.Id, w)
-	encoder.Short(m.endpoint.format, w)
-	encoder.Type(m.Type(), w) // МАГИЯ без этого байта требует авторизации на центральном кластере
+	//encoder.Short(m.endpoint.format, w)
+	encoder.Short(0, w)
 	encoder.Type(m.kind, w)
+	encoder.Type(m.req.Type(), w) // МАГИЯ без этого байта требует авторизации на центральном кластере
 
 	m.req.Format(encoder, m.endpoint.Version(), w) // запись тебя сообщения
 

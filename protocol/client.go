@@ -51,6 +51,8 @@ func NewClient(addr string) *Client {
 	m.addr = addr
 
 	m.ackRespond = make(chan ackRespond)
+	m.responses = make(chan rawResponse)
+	m.endpoints = make(map[int]*endpoint)
 	m.codec = codec.NewCodec1_0()
 	m.resetAck()
 
@@ -149,7 +151,7 @@ func newAckRespond(req types.RequestMessage, wait chan interface{}) ackRespond {
 }
 
 func (c *Client) resetAck() {
-	c.ackRespond = make(chan ackRespond)
+	c.ackRespond = make(chan ackRespond, 1)
 }
 
 // waitAck добавляет в список id сообщения, которому нужно подтверждение
@@ -244,6 +246,10 @@ func (c *Client) startReadingResponses(ctx context.Context) {
 					continue
 				}
 
+				if rawResp.size == 0 {
+					continue
+				}
+
 				c.responses <- rawResp
 
 			}
@@ -255,8 +261,12 @@ func (c *Client) readFromConn(ctx context.Context) (reso rawResponse, err error)
 
 	//c.conn.SetReadDeadline(readTimeout)
 
-	header := make([]byte, 256)
+	header := make([]byte, 20)
 	n, err := c.conn.Read(header)
+	if n == 0 {
+		return rawResponse{}, nil
+	}
+
 	dry.PanicIfErr(err)
 	header = header[:n]
 
@@ -317,7 +327,7 @@ func (c *Client) startRoutingResponses(ctx context.Context) {
 
 				case ENDPOINT_FAILURE:
 
-					panic(pp.Sprintln(res))
+					panic(pp.Sprintln(string(res.payload)))
 
 				case KEEP_ALIVE:
 
@@ -337,9 +347,9 @@ func (c *Client) startRoutingResponses(ctx context.Context) {
 
 func (c *Client) receiveResponse(raw rawResponse) {
 
-	if len(c.ackRespond) == 0 {
-		return
-	}
+	//if len(c.ackRespond) == 0 {
+	//	return
+	//}
 
 	ack := <-c.ackRespond
 

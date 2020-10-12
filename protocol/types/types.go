@@ -1,7 +1,9 @@
 package types
 
 import (
+	uuid "github.com/satori/go.uuid"
 	"github.com/v8platform/rac/protocol/codec"
+	"github.com/v8platform/rac/serialize"
 	"io"
 )
 
@@ -10,6 +12,9 @@ type Endpoint interface {
 
 	SendMessage(req EndpointRequestMessage) (interface{}, error)
 	Close()
+	AuthenticateCluster(uuid uuid.UUID, user, password string) error
+	GetClusters() ([]*serialize.ClusterInfo, error)
+	GetClusterConnections(uuid uuid.UUID) (serialize.ConnectionInfoList, error)
 }
 
 type RequestMessage interface {
