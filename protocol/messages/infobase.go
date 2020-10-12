@@ -140,7 +140,7 @@ func (res *CreateInfobaseResponse) Parse(decoder codec.Decoder, version int, r i
 //  kind MESSAGE_KIND = 1
 //  respond GetInfobaseInfoResponse
 type GetInfobaseInfoRequest struct {
-	ID         uuid.UUID
+	ClusterID  uuid.UUID
 	InfobaseId uuid.UUID
 	response   *GetInfobaseInfoResponse
 }
@@ -150,9 +150,12 @@ func (_ *GetInfobaseInfoRequest) Kind() types.Typed {
 }
 
 func (r *GetInfobaseInfoRequest) ResponseMessage() types.EndpointResponseMessage {
+
 	if r.response == nil {
 		r.response = &GetInfobaseInfoResponse{}
 	}
+
+	r.response.cluster = r.ClusterID
 
 	return r.response
 }
@@ -162,7 +165,7 @@ func (_ *GetInfobaseInfoRequest) Type() types.Typed {
 }
 
 func (r *GetInfobaseInfoRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
-	encoder.Uuid(r.ID, w)
+	encoder.Uuid(r.ClusterID, w)
 	encoder.Uuid(r.InfobaseId, w)
 }
 
@@ -174,7 +177,8 @@ func (r *GetInfobaseInfoRequest) Response() *GetInfobaseInfoResponse {
 //  type GET_INFOBASE_INFO_RESPONSE = 50
 //  return serialize.InfobaseInfo
 type GetInfobaseInfoResponse struct {
-	infobase *serialize.InfobaseInfo
+	cluster  uuid.UUID
+	Infobase serialize.InfobaseInfo
 }
 
 func (_ *GetInfobaseInfoResponse) Kind() types.Typed {
@@ -189,7 +193,9 @@ func (res *GetInfobaseInfoResponse) Parse(decoder codec.Decoder, version int, r 
 
 	info := &serialize.InfobaseInfo{}
 	info.Parse(decoder, version, r)
-	res.infobase = info
+	info.Cluster = res.cluster
+
+	res.Infobase = *info
 
 }
 
@@ -199,7 +205,7 @@ func (res *GetInfobaseInfoResponse) Parse(decoder codec.Decoder, version int, r 
 //  kind MESSAGE_KIND = 1
 //  respond nothing
 type DropInfobaseRequest struct {
-	ID         uuid.UUID
+	ClusterID  uuid.UUID
 	InfobaseId uuid.UUID
 	Mode       int
 }
@@ -218,7 +224,7 @@ func (_ *DropInfobaseRequest) Type() types.Typed {
 }
 
 func (r *DropInfobaseRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
-	encoder.Uuid(r.ID, w)
+	encoder.Uuid(r.ClusterID, w)
 	encoder.Uuid(r.InfobaseId, w)
 	encoder.Int(r.Mode, w)
 }

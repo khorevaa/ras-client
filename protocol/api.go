@@ -128,3 +128,23 @@ func (e *endpoint) GetClusterConnections(id uuid.UUID) (serialize.ConnectionInfo
 
 	return response.Connections, err
 }
+
+func (e *endpoint) DisconnectConnection(cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) error {
+
+	req := messages.DisconnectConnectionRequest{
+		ClusterID:    cluster,
+		ProcessID:    process,
+		ConnectionID: connection,
+	}
+	_, err := e.SendMessage(&req)
+
+	return err
+}
+
+func (e *endpoint) GetInfobaseInfo(cluster uuid.UUID, infobase uuid.UUID) (serialize.InfobaseInfo, error) {
+
+	req := &messages.GetInfobaseInfoRequest{ClusterID: cluster, InfobaseId: infobase}
+	_, err := e.SendMessage(req)
+	response := req.Response()
+	return response.Infobase, err
+}

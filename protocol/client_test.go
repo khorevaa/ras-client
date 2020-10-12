@@ -15,15 +15,15 @@ func TestRASConn_CreateConnection(t *testing.T) {
 
 	defer conn.Disconnect()
 
-	endpoint, err := conn.OpenEndpoint("9.0")
+	end, err := conn.OpenEndpoint("9.0")
 	dry.PanicIfErr(err)
 
-	pp.Println(endpoint)
+	//pp.Println(end)
 
 	//err = conn.AuthenticateAgent("", "")
 	//dry.PanicIfErr(err)
 
-	resp2, err := endpoint.GetClusters()
+	resp2, err := end.GetClusters()
 
 	dry.PanicIfErr(err)
 
@@ -31,7 +31,7 @@ func TestRASConn_CreateConnection(t *testing.T) {
 
 	//id, _ := uuid.FromString(resp2[0].UUID)
 	//
-	err = endpoint.AuthenticateCluster(resp2[0].UUID, "", "")
+	err = end.AuthenticateCluster(resp2[0].UUID, "", "")
 	//
 	//dry.PanicIfErr(err)
 	//
@@ -40,7 +40,7 @@ func TestRASConn_CreateConnection(t *testing.T) {
 	////
 	////pp.Println(r)
 	//
-	r2, err := endpoint.GetClusterConnections(resp2[0].UUID)
+	r2, err := end.GetClusterConnections(resp2[0].UUID)
 	dry.PanicIfErr(err)
 
 	pp.Println(r2)

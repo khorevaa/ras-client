@@ -24,7 +24,9 @@ func (_ *GetConnectionsShortRequest) Kind() types.Typed {
 
 func (r *GetConnectionsShortRequest) ResponseMessage() types.EndpointResponseMessage {
 	if r.response == nil {
-		r.response = &GetConnectionsShortResponse{}
+		r.response = &GetConnectionsShortResponse{
+			cluster: r.ID,
+		}
 	}
 
 	return r.response
@@ -48,6 +50,7 @@ func (r *GetConnectionsShortRequest) Response() *GetConnectionsShortResponse {
 //  kind MESSAGE_KIND = 1
 //  respond serialize.ConnectionInfoList
 type GetConnectionsShortResponse struct {
+	cluster     uuid.UUID
 	Connections serialize.ConnectionInfoList
 }
 
@@ -63,6 +66,9 @@ func (res *GetConnectionsShortResponse) Parse(decoder codec.Decoder, version int
 
 	list := serialize.ConnectionInfoList{}
 	list.Parse(decoder, version, r)
+	list.Each(func(info serialize.ConnectionInfo) {
+		info.Cluster = res.cluster
+	})
 
 	res.Connections = list
 

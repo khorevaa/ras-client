@@ -3,33 +3,165 @@ package serialize
 import (
 	uuid "github.com/satori/go.uuid"
 	"io"
+	"strings"
 	"time"
 )
 
+type InfobaseSig interface {
+	Sig() (cluster uuid.UUID, infobase uuid.UUID)
+}
+
+type InfobaseInfoGetter interface {
+	GetInfobaseInfo(cluster uuid.UUID, infobase uuid.UUID) (InfobaseInfo, error)
+}
+
+type InfobaseDropper interface {
+	DropInfobase(cluster uuid.UUID, infobase uuid.UUID) error
+}
+
+type InfobaseSummaryUpdater interface {
+	UpdateSummaryInfobase(cluster uuid.UUID, info InfobaseSummaryInfo) error
+}
+
+type InfobaseUpdater interface {
+	UpdateInfobase(cluster uuid.UUID, info InfobaseInfo) error
+}
+
+type InfobaseBlocker interface {
+	InfobaseInfoGetter
+	InfobaseUpdater
+}
+
 type InfobaseSummaryList []InfobaseSummaryInfo
 
-func (l InfobaseSummaryList) Parse(decoder Decoder, version int, r io.Reader) {
+func (l InfobaseSummaryList) ByID(id uuid.UUID) (InfobaseSummaryInfo, bool) {
+
+	if id == uuid.Nil {
+		return InfobaseSummaryInfo{}, false
+	}
+
+	fn := func(info InfobaseSummaryInfo) bool {
+		return uuid.Equal(info.UUID, id)
+	}
+
+	val := l.filter(fn, 1)
+
+	if len(val) > 0 {
+		return val[0], true
+	}
+
+	return InfobaseSummaryInfo{}, false
+
+}
+
+func (l InfobaseSummaryList) ByName(name string) (InfobaseSummaryInfo, bool) {
+
+	if len(name) == 0 {
+		return InfobaseSummaryInfo{}, false
+	}
+
+	fn := func(info InfobaseSummaryInfo) bool {
+		return strings.EqualFold(info.Name, name)
+	}
+
+	val := l.filter(fn, 1)
+
+	if len(val) > 0 {
+		return val[0], true
+	}
+
+	return InfobaseSummaryInfo{}, false
+
+}
+
+func (l InfobaseSummaryList) Find(fn func(info InfobaseSummaryInfo) bool) (InfobaseSummaryInfo, bool) {
+
+	val := l.filter(fn, 1)
+
+	if len(val) == 0 {
+		return InfobaseSummaryInfo{}, false
+	}
+
+	return val[0], true
+
+}
+
+func (l InfobaseSummaryList) Filter(fn func(info InfobaseSummaryInfo) bool) InfobaseSummaryList {
+
+	return l.filter(fn, 0)
+
+}
+
+func (l InfobaseSummaryList) Each(fn func(info InfobaseSummaryInfo)) {
+
+	for _, info := range l {
+
+		fn(info)
+
+	}
+
+}
+
+func (l InfobaseSummaryList) filter(fn func(info InfobaseSummaryInfo) bool, count int) (val InfobaseSummaryList) {
+
+	n := 0
+
+	for _, info := range l {
+
+		if n == count {
+			break
+		}
+
+		result := fn(info)
+
+		if result {
+			n += 1
+			val = append(val, info)
+		}
+
+	}
+
+	return
+
+}
+
+func (l *InfobaseSummaryList) Parse(decoder Decoder, version int, r io.Reader) {
 
 	count := decoder.Size(r)
-
+	var ls InfobaseSummaryList
 	for i := 0; i < count; i++ {
 
 		info := &InfobaseSummaryInfo{}
 		info.Parse(decoder, version, r)
 
-		l = append(l, *info)
+		ls = append(ls, *info)
 	}
+
+	*l = ls
 }
 
 type InfobaseSummaryInfo struct {
+	Cluster     uuid.UUID `rac:"-"`
 	UUID        uuid.UUID `rac:"infobase"` //infobase : efa3672f-947a-4d84-bd58-b21997b83561
 	Name        string    //name     : УППБоеваяБаза
 	Description string    `rac:"descr"` //descr    : "УППБоеваяБаза"
 
 }
 
-func (i InfobaseSummaryInfo) InfobaseSig() string {
-	return i.UUID.String()
+func (i InfobaseSummaryInfo) Sig() (uuid.UUID, uuid.UUID) {
+	return i.Cluster, i.UUID
+}
+
+func (i InfobaseSummaryInfo) FullInfo(runner InfobaseInfoGetter) (InfobaseInfo, error) {
+	return runner.GetInfobaseInfo(i.Sig())
+}
+
+func (i InfobaseSummaryInfo) Drop(runner InfobaseDropper) error {
+	return runner.DropInfobase(i.Sig())
+}
+
+func (i InfobaseSummaryInfo) Update(runner InfobaseSummaryUpdater) error {
+	return runner.UpdateSummaryInfobase(i.Cluster, i)
 }
 
 func (i *InfobaseSummaryInfo) Parse(decoder Decoder, version int, r io.Reader) {
@@ -40,7 +172,16 @@ func (i *InfobaseSummaryInfo) Parse(decoder Decoder, version int, r io.Reader) {
 
 }
 
+func (i InfobaseSummaryInfo) Format(encoder Encoder, version int, w io.Writer) {
+
+	encoder.Uuid(i.UUID, w)
+	encoder.String(i.Description, w)
+	encoder.String(i.Name, w)
+
+}
+
 type InfobaseInfo struct {
+	Cluster                                uuid.UUID `rac:"-"`
 	UUID                                   uuid.UUID `rac:"infobase"` //infobase : efa3672f-947a-4d84-bd58-b21997b83561
 	Name                                   string    //name     : УППБоеваяБаза
 	Description                            string    `rac:"descr"` //descr    : "УППБоеваяБаза"
@@ -48,7 +189,7 @@ type InfobaseInfo struct {
 	DbServer                               string    //db-server                                  : sql
 	DbName                                 string    //db-name                                    : base
 	DbUser                                 string    //db-user                                    : user
-	DbPwd                                  string    `rac:"="` //--db-pwd=<pwd>  пароль администратора базы данных
+	DbPwd                                  string    `rac:"-"` //--db-pwd=<pwd>  пароль администратора базы данных
 	SecurityLevel                          int       //security-level                             : 0
 	LicenseDistribution                    int       //license-distribution                       : allow
 	ScheduledJobsDeny                      bool      //scheduled-jobs-deny                        : off
@@ -97,6 +238,7 @@ func (i *InfobaseInfo) Parse(decoder Decoder, version int, r io.Reader) {
 	}
 
 }
+
 func (i InfobaseInfo) Format(encoder Encoder, version int, w io.Writer) {
 
 	encoder.Uuid(i.UUID, w)
@@ -130,6 +272,7 @@ func (i InfobaseInfo) Format(encoder Encoder, version int, w io.Writer) {
 
 func (i InfobaseInfo) Summary() InfobaseSummaryInfo {
 	return InfobaseSummaryInfo{
+		Cluster:     i.Cluster,
 		UUID:        i.UUID,
 		Name:        i.Name,
 		Description: i.Description,
@@ -137,6 +280,127 @@ func (i InfobaseInfo) Summary() InfobaseSummaryInfo {
 
 }
 
-func (i InfobaseInfo) InfobaseSig() string {
-	return i.UUID.String()
+func (i InfobaseInfo) Sig() (uuid.UUID, uuid.UUID) {
+	return i.Cluster, i.UUID
+}
+
+func (i InfobaseInfo) Drop(runner InfobaseDropper) error {
+	return runner.DropInfobase(i.Sig())
+}
+
+func (i *InfobaseInfo) Update(runner InfobaseUpdater) error {
+
+	return runner.UpdateInfobase(i.Cluster, *i)
+
+}
+
+func (i *InfobaseInfo) Reload(runner InfobaseInfoGetter) error {
+
+	newInfo, err := runner.GetInfobaseInfo(i.Sig())
+	if err != nil {
+		return err
+	}
+
+	*i = newInfo
+
+	return nil
+
+}
+
+func (i *InfobaseInfo) Blocker(reload bool) BlockerInfobase {
+
+	return BlockerInfobase{
+		infobase: i,
+		Reload:   reload,
+	}
+
+}
+
+type BlockerInfobase struct {
+	DeniedFrom        time.Time
+	DeniedTo          time.Time
+	Message           string
+	PermissionCode    string
+	ScheduledJobsDeny bool
+	Reload            bool
+
+	runner   InfobaseBlocker
+	infobase *InfobaseInfo
+}
+
+func (b *BlockerInfobase) Msg(msg string) *BlockerInfobase {
+
+	b.Message = msg
+	return b
+}
+
+func (b *BlockerInfobase) Code(code string) *BlockerInfobase {
+
+	b.PermissionCode = code
+	return b
+}
+
+func (b *BlockerInfobase) From(from time.Time) *BlockerInfobase {
+
+	b.DeniedFrom = from
+	return b
+}
+
+func (b *BlockerInfobase) To(to time.Time) *BlockerInfobase {
+
+	b.DeniedTo = to
+	return b
+}
+
+func (b *BlockerInfobase) ScheduledJobs(deny bool) *BlockerInfobase {
+
+	b.ScheduledJobsDeny = deny
+	return b
+}
+
+func (b *BlockerInfobase) Block(runner InfobaseBlocker) error {
+
+	b.runner = runner
+
+	blockInfo := *b.infobase
+	blockInfo.DeniedTo = b.DeniedTo
+	blockInfo.DeniedFrom = b.DeniedFrom
+
+	if len(b.Message) > 0 {
+		blockInfo.DeniedMessage = b.Message
+	}
+
+	if !blockInfo.ScheduledJobsDeny && b.ScheduledJobsDeny {
+		blockInfo.ScheduledJobsDeny = b.ScheduledJobsDeny
+	}
+	blockInfo.SessionsDeny = true
+	blockInfo.PermissionCode = b.PermissionCode
+
+	return runner.UpdateInfobase(blockInfo.Cluster, blockInfo)
+
+}
+
+func (b BlockerInfobase) UnblockWithRunner(runner InfobaseBlocker) error {
+
+	unblockInfo := *b.infobase
+	unblockInfo.SessionsDeny = false
+
+	err := runner.UpdateInfobase(unblockInfo.Cluster, unblockInfo)
+
+	if err != nil {
+		return err
+	}
+
+	if b.Reload {
+		err = b.infobase.Reload(runner)
+	}
+
+	return err
+
+}
+
+func (b BlockerInfobase) Unblock() error {
+
+	return b.UnblockWithRunner(b.runner)
+
 }
