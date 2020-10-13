@@ -153,7 +153,8 @@ func (e *encoder) Double(val float64, w io.Writer) {
 }
 
 func (e *encoder) Null(w io.Writer) {
-	e.Int(NULL_BYTE, w)
+	//e.Byte(NULL_BYTE, w)
+	e.Byte(0x00, w)
 }
 
 func (e *encoder) String(val string, w io.Writer) {

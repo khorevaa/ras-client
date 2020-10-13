@@ -18,6 +18,7 @@ func dateFromTicks(ticks int64) time.Time {
 }
 
 func dateToTicks(date time.Time) (ticks int64) {
+
 	if !date.IsZero() {
 
 		ticks = date.UnixNano() / int64(time.Millisecond)

@@ -5,6 +5,10 @@ import (
 	"io"
 )
 
+type ClusterInfoGetter interface {
+	GetClusterInfo(cluster uuid.UUID) (ClusterInfo, error)
+}
+
 type ClusterInfo struct {
 	UUID                       uuid.UUID `rac:"cluster"` // UUID cluster                    : 6d6958e1-a96c-4999-a995-698a0298161e
 	Host                       string    // Host                          : Sport2

@@ -56,7 +56,11 @@ func newEndpoint(conn *Client, id int, serviceID string, version string) *endpoi
 
 func (e *endpoint) Version() int {
 
-	v, _ := strconv.ParseInt(e.version, 0, 64)
+	v, err := strconv.ParseFloat(e.version, 10)
+	if err != nil {
+		panic(err)
+	}
+
 	return int(v)
 }
 
@@ -154,7 +158,7 @@ func (e *endpoint) tryParse(t types.Typed, p codec.BinaryParser, r io.Reader) (e
 		respondType := decoder.Type(r)
 
 		if t.Type() != respondType {
-			pp.Println("decoded type", respondType)
+			//pp.Println("decoded type", respondType)
 			return
 		}
 
@@ -208,7 +212,7 @@ func (m *EndpointMessageFailure) Parse(decoder codec.Decoder, r io.Reader) {
 	decoder.StringPtr(&m.ServiceID, r)
 	decoder.StringPtr(&m.Message, r)
 
-	pp.Println("EndpointMessageFailure", m)
+	//pp.Println("EndpointMessageFailure", m)
 
 }
 
@@ -244,9 +248,7 @@ func (m *EndpointMessage) GetMessage() *bytes.Reader {
 	return m.bufReader
 }
 
-func (m *EndpointMessage) Parse(decoder codec.Decoder, r io.Reader) {
-
-}
+func (m *EndpointMessage) Parse(_ codec.Decoder, _ io.Reader) {}
 
 func (m *EndpointMessage) String() string {
 	return pp.Sprintln(m)

@@ -17,7 +17,7 @@ type ClusterAuthenticateRequest struct {
 	User, Password string
 }
 
-func (r ClusterAuthenticateRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r ClusterAuthenticateRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 	encoder.Uuid(r.ClusterID, w)
 	encoder.String(r.User, w)
 	encoder.String(r.Password, w)
@@ -56,7 +56,7 @@ func (_ AuthenticateAgentRequest) Type() types.Typed {
 	return AUTHENTICATE_AGENT_REQUEST
 }
 
-func (r AuthenticateAgentRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r AuthenticateAgentRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 
 	encoder.String(r.User, w)
 	encoder.String(r.Password, w)
@@ -69,7 +69,7 @@ func (r AuthenticateAgentRequest) Format(encoder codec.Encoder, version int, w i
 //  kind MESSAGE_KIND = 1
 //  respond nothing
 type AuthenticateInfobaseRequest struct {
-	InfobaseID     uuid.UUID
+	ClusterID      uuid.UUID
 	User, Password string
 }
 
@@ -85,9 +85,9 @@ func (_ AuthenticateInfobaseRequest) Type() types.Typed {
 	return ADD_AUTHENTICATION_REQUEST
 }
 
-func (r AuthenticateInfobaseRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r AuthenticateInfobaseRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 
-	encoder.Uuid(r.InfobaseID, w)
+	encoder.Uuid(r.ClusterID, w)
 	encoder.String(r.User, w)
 	encoder.String(r.Password, w)
 

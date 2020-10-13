@@ -25,7 +25,7 @@ func (_ *GetConnectionsShortRequest) Kind() types.Typed {
 func (r *GetConnectionsShortRequest) ResponseMessage() types.EndpointResponseMessage {
 	if r.response == nil {
 		r.response = &GetConnectionsShortResponse{
-			cluster: r.ID,
+			ClusterID: r.ID,
 		}
 	}
 
@@ -36,7 +36,7 @@ func (_ *GetConnectionsShortRequest) Type() types.Typed {
 	return GET_CONNECTIONS_SHORT_REQUEST
 }
 
-func (r *GetConnectionsShortRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r *GetConnectionsShortRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 	encoder.Uuid(r.ID, w)
 }
 
@@ -48,10 +48,10 @@ func (r *GetConnectionsShortRequest) Response() *GetConnectionsShortResponse {
 //
 //  type GET_CONNECTIONS_SHORT_RESPONSE = 52
 //  kind MESSAGE_KIND = 1
-//  respond serialize.ConnectionInfoList
+//  respond serialize.ConnectionShortInfoList
 type GetConnectionsShortResponse struct {
-	cluster     uuid.UUID
-	Connections serialize.ConnectionInfoList
+	ClusterID   uuid.UUID
+	Connections serialize.ConnectionShortInfoList
 }
 
 func (_ *GetConnectionsShortResponse) Kind() types.Typed {
@@ -64,10 +64,10 @@ func (_ *GetConnectionsShortResponse) Type() types.Typed {
 
 func (res *GetConnectionsShortResponse) Parse(decoder codec.Decoder, version int, r io.Reader) {
 
-	list := serialize.ConnectionInfoList{}
+	list := serialize.ConnectionShortInfoList{}
 	list.Parse(decoder, version, r)
-	list.Each(func(info serialize.ConnectionInfo) {
-		info.Cluster = res.cluster
+	list.Each(func(info *serialize.ConnectionShortInfo) {
+		info.ClusterID = res.ClusterID
 	})
 
 	res.Connections = list
@@ -97,8 +97,79 @@ func (_ DisconnectConnectionRequest) ResponseMessage() types.EndpointResponseMes
 	return nullEndpointResponse()
 }
 
-func (r *DisconnectConnectionRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r *DisconnectConnectionRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 	encoder.Uuid(r.ClusterID, w)
 	encoder.Uuid(r.ProcessID, w)
 	encoder.Uuid(r.ConnectionID, w)
+}
+
+// GetInfobaseConnectionsShortRequest получение списка соединений кластера
+//
+//  type GET_INFOBASE_CONNECTIONS_SHORT_REQUEST = 52
+//  kind MESSAGE_KIND = 1
+//  respond GetInfobaseConnectionsShortResponse
+type GetInfobaseConnectionsShortRequest struct {
+	ClusterID  uuid.UUID
+	InfobaseID uuid.UUID
+	response   *GetInfobaseConnectionsShortResponse
+}
+
+func (_ *GetInfobaseConnectionsShortRequest) Kind() types.Typed {
+	return MESSAGE_KIND
+}
+
+func (r *GetInfobaseConnectionsShortRequest) ResponseMessage() types.EndpointResponseMessage {
+	if r.response == nil {
+		r.response = &GetInfobaseConnectionsShortResponse{}
+	}
+
+	r.response.ClusterID = r.ClusterID
+	r.response.InfobaseID = r.InfobaseID
+
+	return r.response
+}
+
+func (_ *GetInfobaseConnectionsShortRequest) Type() types.Typed {
+	return GET_INFOBASE_CONNECTIONS_SHORT_REQUEST
+}
+
+func (r *GetInfobaseConnectionsShortRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
+	encoder.Uuid(r.ClusterID, w)
+	encoder.Uuid(r.InfobaseID, w)
+}
+
+func (r *GetInfobaseConnectionsShortRequest) Response() *GetInfobaseConnectionsShortResponse {
+	return r.response
+}
+
+// GetConnectionsShortResponse ответ со списком соединений кластера
+//
+//  type GET_INFOBASE_CONNECTIONS_SHORT_RESPONSE = 53
+//  kind MESSAGE_KIND = 1
+//  respond Connections serialize.ConnectionShortInfoList
+type GetInfobaseConnectionsShortResponse struct {
+	ClusterID   uuid.UUID
+	InfobaseID  uuid.UUID
+	Connections serialize.ConnectionShortInfoList
+}
+
+func (_ *GetInfobaseConnectionsShortResponse) Kind() types.Typed {
+	return MESSAGE_KIND
+}
+
+func (_ *GetInfobaseConnectionsShortResponse) Type() types.Typed {
+	return GET_INFOBASE_CONNECTIONS_SHORT_RESPONSE
+}
+
+func (res *GetInfobaseConnectionsShortResponse) Parse(decoder codec.Decoder, version int, r io.Reader) {
+
+	list := serialize.ConnectionShortInfoList{}
+	list.Parse(decoder, version, r)
+	list.Each(func(info *serialize.ConnectionShortInfo) {
+		info.ClusterID = res.ClusterID
+		info.InfobaseID = res.InfobaseID
+	})
+
+	res.Connections = list
+
 }

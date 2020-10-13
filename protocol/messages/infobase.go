@@ -18,7 +18,7 @@ type GetInfobasesShortRequest struct {
 	response  *GetInfobasesShortResponse
 }
 
-func (r GetInfobasesShortRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r GetInfobasesShortRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 	encoder.Uuid(r.ClusterID, w)
 }
 
@@ -26,10 +26,11 @@ func (_ GetInfobasesShortRequest) Kind() types.Typed {
 	return MESSAGE_KIND
 }
 
-func (r GetInfobasesShortRequest) ResponseMessage() types.EndpointResponseMessage {
+func (r *GetInfobasesShortRequest) ResponseMessage() types.EndpointResponseMessage {
 	if r.response == nil {
 		r.response = &GetInfobasesShortResponse{}
 	}
+	r.response.ClusterID = r.ClusterID
 
 	return r.response
 }
@@ -38,29 +39,40 @@ func (_ GetInfobasesShortRequest) Type() types.Typed {
 	return GET_INFOBASES_SHORT_REQUEST
 }
 
-func (r GetInfobasesShortRequest) Response() *GetInfobasesShortResponse {
+func (r *GetInfobasesShortRequest) Response() *GetInfobasesShortResponse {
 	return r.response
 }
 
 // GetInfobasesShortResponse
 // type GET_INFOBASES_SHORT_RESPONSE = 44
 type GetInfobasesShortResponse struct {
-	Infobases []*serialize.InfobaseSummaryInfo
+	Infobases serialize.InfobaseSummaryList
+	ClusterID uuid.UUID
 }
 
 func (res *GetInfobasesShortResponse) Parse(decoder codec.Decoder, version int, r io.Reader) {
 
-	count := decoder.Size(r)
+	list := serialize.InfobaseSummaryList{}
 
-	for i := 0; i < count; i++ {
+	list.Parse(decoder, version, r)
 
-		info := &serialize.InfobaseSummaryInfo{}
-		decoder.UuidPtr(&info.UUID, r)
-		decoder.StringPtr(&info.Description, r)
-		decoder.StringPtr(&info.Name, r)
+	list.Each(func(info *serialize.InfobaseSummaryInfo) {
+		info.Cluster = res.ClusterID
+	})
 
-		res.Infobases = append(res.Infobases, info)
-	}
+	res.Infobases = list
+	//
+	//count := decoder.Size(r)
+	//
+	//for i := 0; i < count; i++ {
+	//
+	//	info := &serialize.InfobaseSummaryInfo{}
+	//	decoder.UuidPtr(&info.UUID, r)
+	//	decoder.StringPtr(&info.Description, r)
+	//	decoder.StringPtr(&info.Name, r)
+	//
+	//	res.Infobases = append(res.Infobases, info)
+	//}
 
 }
 
@@ -78,10 +90,10 @@ func (_ *GetInfobasesShortResponse) Type() types.Typed {
 //  kind MESSAGE_KIND = 1
 //  respond CreateInfobaseResponse
 type CreateInfobaseRequest struct {
-	ID       uuid.UUID
-	Infobase *serialize.InfobaseInfo
-	response *CreateInfobaseResponse
-	Mode     int // Mode 1 - создавать базу на сервере, 0 - не создавать
+	ClusterID uuid.UUID
+	Infobase  *serialize.InfobaseInfo
+	response  *CreateInfobaseResponse
+	Mode      int // Mode 1 - создавать базу на сервере, 0 - не создавать
 
 }
 
@@ -102,7 +114,7 @@ func (_ *CreateInfobaseRequest) Type() types.Typed {
 }
 
 func (r *CreateInfobaseRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
-	encoder.Uuid(r.ID, w)
+	encoder.Uuid(r.ClusterID, w)
 
 	r.Infobase.Format(encoder, version, w)
 
@@ -117,7 +129,8 @@ func (r *CreateInfobaseRequest) Response() *CreateInfobaseResponse {
 //  type CREATE_INFOBASE_RESPONSE = 39
 //  return uuid.UUID созданной базы
 type CreateInfobaseResponse struct {
-	ID uuid.UUID
+	ClusterID  uuid.UUID
+	InfobaseID uuid.UUID
 }
 
 func (_ *CreateInfobaseResponse) Kind() types.Typed {
@@ -128,9 +141,9 @@ func (_ *CreateInfobaseResponse) Type() types.Typed {
 	return CREATE_INFOBASE_RESPONSE
 }
 
-func (res *CreateInfobaseResponse) Parse(decoder codec.Decoder, version int, r io.Reader) {
+func (res *CreateInfobaseResponse) Parse(decoder codec.Decoder, _ int, r io.Reader) {
 
-	decoder.UuidPtr(&res.ID, r)
+	decoder.UuidPtr(&res.InfobaseID, r)
 
 }
 
@@ -141,7 +154,7 @@ func (res *CreateInfobaseResponse) Parse(decoder codec.Decoder, version int, r i
 //  respond GetInfobaseInfoResponse
 type GetInfobaseInfoRequest struct {
 	ClusterID  uuid.UUID
-	InfobaseId uuid.UUID
+	InfobaseID uuid.UUID
 	response   *GetInfobaseInfoResponse
 }
 
@@ -155,7 +168,7 @@ func (r *GetInfobaseInfoRequest) ResponseMessage() types.EndpointResponseMessage
 		r.response = &GetInfobaseInfoResponse{}
 	}
 
-	r.response.cluster = r.ClusterID
+	r.response.ClusterID = r.ClusterID
 
 	return r.response
 }
@@ -164,9 +177,9 @@ func (_ *GetInfobaseInfoRequest) Type() types.Typed {
 	return GET_INFOBASE_INFO_REQUEST
 }
 
-func (r *GetInfobaseInfoRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r *GetInfobaseInfoRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 	encoder.Uuid(r.ClusterID, w)
-	encoder.Uuid(r.InfobaseId, w)
+	encoder.Uuid(r.InfobaseID, w)
 }
 
 func (r *GetInfobaseInfoRequest) Response() *GetInfobaseInfoResponse {
@@ -177,8 +190,8 @@ func (r *GetInfobaseInfoRequest) Response() *GetInfobaseInfoResponse {
 //  type GET_INFOBASE_INFO_RESPONSE = 50
 //  return serialize.InfobaseInfo
 type GetInfobaseInfoResponse struct {
-	cluster  uuid.UUID
-	Infobase serialize.InfobaseInfo
+	ClusterID uuid.UUID
+	Infobase  serialize.InfobaseInfo
 }
 
 func (_ *GetInfobaseInfoResponse) Kind() types.Typed {
@@ -193,7 +206,7 @@ func (res *GetInfobaseInfoResponse) Parse(decoder codec.Decoder, version int, r 
 
 	info := &serialize.InfobaseInfo{}
 	info.Parse(decoder, version, r)
-	info.Cluster = res.cluster
+	info.ClusterID = res.ClusterID
 
 	res.Infobase = *info
 
@@ -223,8 +236,68 @@ func (_ *DropInfobaseRequest) Type() types.Typed {
 	return DROP_INFOBASE_REQUEST
 }
 
-func (r *DropInfobaseRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r *DropInfobaseRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 	encoder.Uuid(r.ClusterID, w)
 	encoder.Uuid(r.InfobaseId, w)
 	encoder.Int(r.Mode, w)
+}
+
+// UpdateInfobaseRequest запрос обновление данных по информационной базы
+//
+//  type UPDATE_INFOBASE_REQUEST = 40
+//  kind MESSAGE_KIND = 1
+//  respond nothing
+type UpdateInfobaseRequest struct {
+	ClusterID uuid.UUID
+	Infobase  serialize.InfobaseInfo
+}
+
+func (_ *UpdateInfobaseRequest) Kind() types.Typed {
+	return MESSAGE_KIND
+}
+
+func (r *UpdateInfobaseRequest) ResponseMessage() types.EndpointResponseMessage {
+
+	return nullEndpointResponse()
+}
+
+func (_ *UpdateInfobaseRequest) Type() types.Typed {
+	return UPDATE_INFOBASE_REQUEST
+}
+
+func (r *UpdateInfobaseRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+
+	encoder.Uuid(r.ClusterID, w)
+	r.Infobase.Format(encoder, version, w)
+
+}
+
+// UpdateInfobaseShortRequest запрос обновление данных по информационной базы
+//
+//  type UPDATE_INFOBASE_REQUEST = 40
+//  kind MESSAGE_KIND = 1
+//  respond nothing
+type UpdateInfobaseShortRequest struct {
+	ClusterID uuid.UUID
+	Infobase  serialize.InfobaseSummaryInfo
+}
+
+func (_ *UpdateInfobaseShortRequest) Kind() types.Typed {
+	return MESSAGE_KIND
+}
+
+func (r *UpdateInfobaseShortRequest) ResponseMessage() types.EndpointResponseMessage {
+
+	return nullEndpointResponse()
+}
+
+func (_ *UpdateInfobaseShortRequest) Type() types.Typed {
+	return UPDATE_INFOBASE_SHORT_REQUEST
+}
+
+func (r *UpdateInfobaseShortRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+
+	encoder.Uuid(r.ClusterID, w)
+	r.Infobase.Format(encoder, version, w)
+
 }

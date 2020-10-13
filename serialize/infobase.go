@@ -15,6 +15,18 @@ type InfobaseInfoGetter interface {
 	GetInfobaseInfo(cluster uuid.UUID, infobase uuid.UUID) (InfobaseInfo, error)
 }
 
+type InfobaseConnectionsGetter interface {
+	GetInfobaseConnections(cluster uuid.UUID, infobase uuid.UUID) (ConnectionShortInfoList, error)
+}
+
+type InfobaseSessionsGetter interface {
+	GetInfobaseSessions(cluster uuid.UUID, infobase uuid.UUID) (SessionInfoList, error)
+}
+
+type InfobaseLocksGetter interface {
+	GetInfobaseLocks(cluster uuid.UUID, infobase uuid.UUID) (LocksList, error)
+}
+
 type InfobaseDropper interface {
 	DropInfobase(cluster uuid.UUID, infobase uuid.UUID) error
 }
@@ -32,15 +44,15 @@ type InfobaseBlocker interface {
 	InfobaseUpdater
 }
 
-type InfobaseSummaryList []InfobaseSummaryInfo
+type InfobaseSummaryList []*InfobaseSummaryInfo
 
-func (l InfobaseSummaryList) ByID(id uuid.UUID) (InfobaseSummaryInfo, bool) {
+func (l InfobaseSummaryList) ByID(id uuid.UUID) (*InfobaseSummaryInfo, bool) {
 
 	if id == uuid.Nil {
-		return InfobaseSummaryInfo{}, false
+		return nil, false
 	}
 
-	fn := func(info InfobaseSummaryInfo) bool {
+	fn := func(info *InfobaseSummaryInfo) bool {
 		return uuid.Equal(info.UUID, id)
 	}
 
@@ -50,17 +62,17 @@ func (l InfobaseSummaryList) ByID(id uuid.UUID) (InfobaseSummaryInfo, bool) {
 		return val[0], true
 	}
 
-	return InfobaseSummaryInfo{}, false
+	return nil, false
 
 }
 
-func (l InfobaseSummaryList) ByName(name string) (InfobaseSummaryInfo, bool) {
+func (l InfobaseSummaryList) ByName(name string) (*InfobaseSummaryInfo, bool) {
 
 	if len(name) == 0 {
-		return InfobaseSummaryInfo{}, false
+		return nil, false
 	}
 
-	fn := func(info InfobaseSummaryInfo) bool {
+	fn := func(info *InfobaseSummaryInfo) bool {
 		return strings.EqualFold(info.Name, name)
 	}
 
@@ -70,29 +82,29 @@ func (l InfobaseSummaryList) ByName(name string) (InfobaseSummaryInfo, bool) {
 		return val[0], true
 	}
 
-	return InfobaseSummaryInfo{}, false
+	return nil, false
 
 }
 
-func (l InfobaseSummaryList) Find(fn func(info InfobaseSummaryInfo) bool) (InfobaseSummaryInfo, bool) {
+func (l InfobaseSummaryList) Find(fn func(info *InfobaseSummaryInfo) bool) (*InfobaseSummaryInfo, bool) {
 
 	val := l.filter(fn, 1)
 
 	if len(val) == 0 {
-		return InfobaseSummaryInfo{}, false
+		return nil, false
 	}
 
 	return val[0], true
 
 }
 
-func (l InfobaseSummaryList) Filter(fn func(info InfobaseSummaryInfo) bool) InfobaseSummaryList {
+func (l InfobaseSummaryList) Filter(fn func(info *InfobaseSummaryInfo) bool) InfobaseSummaryList {
 
 	return l.filter(fn, 0)
 
 }
 
-func (l InfobaseSummaryList) Each(fn func(info InfobaseSummaryInfo)) {
+func (l InfobaseSummaryList) Each(fn func(info *InfobaseSummaryInfo)) {
 
 	for _, info := range l {
 
@@ -102,7 +114,7 @@ func (l InfobaseSummaryList) Each(fn func(info InfobaseSummaryInfo)) {
 
 }
 
-func (l InfobaseSummaryList) filter(fn func(info InfobaseSummaryInfo) bool, count int) (val InfobaseSummaryList) {
+func (l InfobaseSummaryList) filter(fn func(info *InfobaseSummaryInfo) bool, count int) (val InfobaseSummaryList) {
 
 	n := 0
 
@@ -134,7 +146,7 @@ func (l *InfobaseSummaryList) Parse(decoder Decoder, version int, r io.Reader) {
 		info := &InfobaseSummaryInfo{}
 		info.Parse(decoder, version, r)
 
-		ls = append(ls, *info)
+		ls = append(ls, info)
 	}
 
 	*l = ls
@@ -164,7 +176,7 @@ func (i InfobaseSummaryInfo) Update(runner InfobaseSummaryUpdater) error {
 	return runner.UpdateSummaryInfobase(i.Cluster, i)
 }
 
-func (i *InfobaseSummaryInfo) Parse(decoder Decoder, version int, r io.Reader) {
+func (i *InfobaseSummaryInfo) Parse(decoder Decoder, _ int, r io.Reader) {
 
 	decoder.UuidPtr(&i.UUID, r)
 	decoder.StringPtr(&i.Description, r)
@@ -172,7 +184,7 @@ func (i *InfobaseSummaryInfo) Parse(decoder Decoder, version int, r io.Reader) {
 
 }
 
-func (i InfobaseSummaryInfo) Format(encoder Encoder, version int, w io.Writer) {
+func (i InfobaseSummaryInfo) Format(encoder Encoder, _ int, w io.Writer) {
 
 	encoder.Uuid(i.UUID, w)
 	encoder.String(i.Description, w)
@@ -181,7 +193,6 @@ func (i InfobaseSummaryInfo) Format(encoder Encoder, version int, w io.Writer) {
 }
 
 type InfobaseInfo struct {
-	Cluster                                uuid.UUID `rac:"-"`
 	UUID                                   uuid.UUID `rac:"infobase"` //infobase : efa3672f-947a-4d84-bd58-b21997b83561
 	Name                                   string    //name     : УППБоеваяБаза
 	Description                            string    `rac:"descr"` //descr    : "УППБоеваяБаза"
@@ -206,6 +217,13 @@ type InfobaseInfo struct {
 	ReserveWorkingProcesses                bool      //reserve-working-processes                  : no
 	DateOffset                             int
 	Locale                                 string
+
+	ClusterID uuid.UUID `rac:"-"`
+
+	Cluster     *ClusterInfo
+	Connections *ConnectionShortInfoList
+	Sessions    *SessionInfoList
+	Locks       *LocksList
 }
 
 func (i *InfobaseInfo) Parse(decoder Decoder, version int, r io.Reader) {
@@ -233,7 +251,7 @@ func (i *InfobaseInfo) Parse(decoder Decoder, version int, r io.Reader) {
 	decoder.BoolPtr(&i.ExternalSessionManagerRequired, r)
 	decoder.StringPtr(&i.SecurityProfileName, r)
 	decoder.StringPtr(&i.SafeModeSecurityProfileName, r)
-	if version > 9 {
+	if version >= 9 {
 		decoder.BoolPtr(&i.ReserveWorkingProcesses, r)
 	}
 
@@ -264,7 +282,7 @@ func (i InfobaseInfo) Format(encoder Encoder, version int, w io.Writer) {
 	encoder.Bool(i.ExternalSessionManagerRequired, w)
 	encoder.String(i.SecurityProfileName, w)
 	encoder.String(i.SafeModeSecurityProfileName, w)
-	if version > 9 {
+	if version >= 9 {
 		encoder.Bool(i.ReserveWorkingProcesses, w)
 	}
 
@@ -272,7 +290,7 @@ func (i InfobaseInfo) Format(encoder Encoder, version int, w io.Writer) {
 
 func (i InfobaseInfo) Summary() InfobaseSummaryInfo {
 	return InfobaseSummaryInfo{
-		Cluster:     i.Cluster,
+		Cluster:     i.ClusterID,
 		UUID:        i.UUID,
 		Name:        i.Name,
 		Description: i.Description,
@@ -281,7 +299,7 @@ func (i InfobaseInfo) Summary() InfobaseSummaryInfo {
 }
 
 func (i InfobaseInfo) Sig() (uuid.UUID, uuid.UUID) {
-	return i.Cluster, i.UUID
+	return i.ClusterID, i.UUID
 }
 
 func (i InfobaseInfo) Drop(runner InfobaseDropper) error {
@@ -290,7 +308,7 @@ func (i InfobaseInfo) Drop(runner InfobaseDropper) error {
 
 func (i *InfobaseInfo) Update(runner InfobaseUpdater) error {
 
-	return runner.UpdateInfobase(i.Cluster, *i)
+	return runner.UpdateInfobase(i.ClusterID, *i)
 
 }
 
@@ -305,6 +323,39 @@ func (i *InfobaseInfo) Reload(runner InfobaseInfoGetter) error {
 
 	return nil
 
+}
+
+func (i *InfobaseInfo) GetConnections(runner InfobaseConnectionsGetter) (*ConnectionShortInfoList, error) {
+
+	list, err := runner.GetInfobaseConnections(i.Sig())
+	if err != nil {
+		return nil, err
+	}
+	i.Connections = &list
+
+	return i.Connections, err
+}
+
+func (i *InfobaseInfo) GetSessions(runner InfobaseSessionsGetter) (*SessionInfoList, error) {
+
+	list, err := runner.GetInfobaseSessions(i.Sig())
+	if err != nil {
+		return nil, err
+	}
+	i.Sessions = &list
+
+	return i.Sessions, err
+}
+
+func (i *InfobaseInfo) GetLocks(runner InfobaseLocksGetter) (*LocksList, error) {
+
+	list, err := runner.GetInfobaseLocks(i.Sig())
+	if err != nil {
+		return nil, err
+	}
+	i.Locks = &list
+
+	return i.Locks, err
 }
 
 func (i *InfobaseInfo) Blocker(reload bool) BlockerInfobase {
@@ -376,7 +427,7 @@ func (b *BlockerInfobase) Block(runner InfobaseBlocker) error {
 	blockInfo.SessionsDeny = true
 	blockInfo.PermissionCode = b.PermissionCode
 
-	return runner.UpdateInfobase(blockInfo.Cluster, blockInfo)
+	return runner.UpdateInfobase(blockInfo.ClusterID, blockInfo)
 
 }
 
@@ -384,8 +435,7 @@ func (b BlockerInfobase) UnblockWithRunner(runner InfobaseBlocker) error {
 
 	unblockInfo := *b.infobase
 	unblockInfo.SessionsDeny = false
-
-	err := runner.UpdateInfobase(unblockInfo.Cluster, unblockInfo)
+	err := runner.UpdateInfobase(unblockInfo.ClusterID, unblockInfo)
 
 	if err != nil {
 		return err

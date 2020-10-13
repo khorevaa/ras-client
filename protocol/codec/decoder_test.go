@@ -144,7 +144,7 @@ package codec
 //}
 //
 ////
-////protected Object decode(final ChannelHandlerContext ctx, final Channel channel, final ChannelBuffer buffer, final MessageDecoderState state) throws Exception {
+////protected ObjectID decode(final ChannelHandlerContext ctx, final Channel channel, final ChannelBuffer buffer, final MessageDecoderState state) throws Exception {
 ////if (buffer.readableBytes() == 0) {
 ////return null;
 ////}
