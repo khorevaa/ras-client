@@ -112,17 +112,17 @@ func (l *LicenseInfoList) Parse(decoder Decoder, version int, r io.Reader) {
 }
 
 type LicenseInfo struct {
-	ProcessID uuid.UUID //process            : 94232f94-be78-4acd-a11e-09911bd4f4ed
-	SessionID uuid.UUID //session            : e45c1c2b-b3ac-4fea-9f0c-0583ad65d117
-	//UserName       string    //user-name          : User
+	ProcessID uuid.UUID // process            : 94232f94-be78-4acd-a11e-09911bd4f4ed
+	SessionID uuid.UUID // session            : e45c1c2b-b3ac-4fea-9f0c-0583ad65d117
+	// UserName       string    //user-name          : User
 	//Host           string    //host               : host
 	//AppId          string    //app-id             : 1CV8
-	FullName          string //full-name          :
-	Series            string //series             : "ORG8A"
-	IssuedByServer    bool   //issued-by-server   : yes
-	LicenseType       int    //license-type       : HASP
-	Net               bool   //net                : yes
-	MaxUsersAll       int    //max-users-all      : 300
+	FullName          string // full-name          :
+	Series            string // series             : "ORG8A"
+	IssuedByServer    bool   // issued-by-server   : yes
+	LicenseType       int    // license-type       : HASP
+	Net               bool   // net                : yes
+	MaxUsersAll       int    // max-users-all      : 300
 	MaxUsersCur       int    //max-users-cur      : 300
 	RmngrAddress      string //rmngr-address      : "app"
 	RmngrPort         int    //rmngr-port         : 1541

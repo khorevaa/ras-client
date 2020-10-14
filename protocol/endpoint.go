@@ -15,19 +15,16 @@ import (
 const defaultFormat = 256
 
 type endpoint struct {
-	conn      *Client
-	Id        int
 	serviceID string
 	version   string
+	codec     codec.Codec
+	ctx       context.Context
+	conn      *Client
+	Id        int
+	messages  chan EndpointMessage
+	wait      chan chan EndpointMessage
 	format    int16
-
-	codec codec.Codec
-
-	messages chan EndpointMessage
-	wait     chan chan EndpointMessage
-
-	opened bool
-	ctx    context.Context
+	opened    bool
 }
 
 func (e *endpoint) Close() {
@@ -158,7 +155,7 @@ func (e *endpoint) tryParse(t types.Typed, p codec.BinaryParser, r io.Reader) (e
 		respondType := decoder.Type(r)
 
 		if t.Type() != respondType {
-			//pp.Println("decoded type", respondType)
+			// pp.Println("decoded type", respondType)
 			return
 		}
 
@@ -254,14 +251,14 @@ func (m *EndpointMessage) String() string {
 	return pp.Sprintln(m)
 }
 
-func (m *EndpointMessage) Format(encoder codec.Encoder, w io.Writer) {
+func (m *EndpointMessage) Format(encoder codec.Encoder, version int, w io.Writer) {
 
 	encoder.EndpointId(m.endpoint.Id, w)
-	//encoder.Short(m.endpoint.format, w)
+	// encoder.Short(m.endpoint.format, w)
 	encoder.Short(0, w)
 	encoder.Type(m.kind, w)
 	encoder.Type(m.req.Type(), w) // МАГИЯ без этого байта требует авторизации на центральном кластере
 
-	m.req.Format(encoder, m.endpoint.Version(), w) // запись тебя сообщения
+	m.req.Format(encoder, version, w) // запись тебя сообщения
 
 }
