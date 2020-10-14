@@ -46,7 +46,6 @@ type Endpoint interface {
 type RequestMessage interface {
 	Type() Typed
 	Format(codec codec.Encoder, w io.Writer)
-	ResponseMessage() ResponseMessage
 }
 
 type ResponseMessage interface {
@@ -57,14 +56,12 @@ type ResponseMessage interface {
 type EndpointRequestMessage interface {
 	Type() Typed
 	Format(encoder codec.Encoder, version int, w io.Writer)
-	Kind() Typed
-	ResponseMessage() EndpointResponseMessage
+	//AuthSig() string
 }
 
 type EndpointResponseMessage interface {
 	Type() Typed
 	Parse(decoder codec.Decoder, version int, r io.Reader)
-	Kind() Typed
 }
 
 type Typed interface {

@@ -75,7 +75,7 @@ type BinaryMarshaller interface {
 }
 
 type BinaryWriter interface {
-	FormatWrite(codec Encoder, version int, writer io.Writer)
+	Format(codec Encoder, version int, writer io.Writer)
 }
 
 type BinaryParser interface {

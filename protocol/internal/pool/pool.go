@@ -4,9 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/k0kubun/pp"
 	uuid "github.com/satori/go.uuid"
 	"github.com/v8platform/rac/protocol"
 	"github.com/v8platform/rac/protocol/codec"
+	"github.com/v8platform/rac/protocol/messages"
+	"github.com/v8platform/rac/protocol/types"
+	"github.com/v8platform/rac/serialize"
+	"io"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -87,14 +92,15 @@ var timers = sync.Pool{
 }
 
 var (
-	ErrClosed      = errors.New("protocol: pool is closed")
-	ErrPoolTimeout = errors.New("protocol: endpoint pool timeout")
+	ErrClosed         = errors.New("protocol: pool is closed")
+	ErrUnknownMessage = errors.New("protocol: unknown message packet")
+	ErrPoolTimeout    = errors.New("protocol: endpoint pool timeout")
 )
 
 type EndpointInfo interface {
 	ID() int
 	Version() int
-	Format() string
+	Format() int16
 	ServiceID() string
 	Codec() codec.Codec
 }
@@ -102,10 +108,11 @@ type EndpointInfo interface {
 type Endpoint struct {
 	id        int
 	version   int
-	format    string
+	format    int16
 	serviceID string
 	codec     codec.Codec
 
+	conn      *Conn
 	createdAt time.Time
 	usedAt    uint32 // atomic
 	pooled    bool
@@ -146,7 +153,43 @@ func (e *Endpoint) Codec() codec.Codec {
 	panic("implement me")
 }
 
-func (e *Endpoint) sendRequest(ctx context.Context, conn net.Conn, m protocol.EndpointMessage) (*protocol.EndpointMessage, error) {
+type UnknownMessageError struct {
+	Type     byte
+	Data     []byte
+	Endpoint *Endpoint
+	err      error
+}
+
+func (m *UnknownMessageError) Error() string {
+
+	return m.err.Error()
+
+}
+
+func (e *Endpoint) sendRequest(ctx context.Context, conn *Conn, message *EndpointMessage) (*EndpointMessage, error) {
+
+	body := bytes.NewBuffer([]byte{})
+
+	message.Format(e.codec.Encoder(), e.version, body)
+
+	packet := NewPacket(byte(message.Type().Type()), body.Bytes())
+
+	err := conn.SendPacket(packet)
+	if err != nil {
+		return nil, err
+	}
+
+	answer, err := conn.GetPacket(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return e.tryParseMessage(answer)
+
+}
+
+func (e *Endpoint) sendVoidRequest(ctx context.Context, conn *Conn, m protocol.EndpointMessage) error {
 
 	body := bytes.NewBuffer([]byte{})
 
@@ -154,18 +197,143 @@ func (e *Endpoint) sendRequest(ctx context.Context, conn net.Conn, m protocol.En
 
 	packet := NewPacket(byte(m.Type().Type()), body.Bytes())
 
-	err := packet.Write(conn)
+	err := conn.SendPacket(packet)
+	if err != nil {
+		return err
+	}
 
-	//conn.Unlock()
+	return nil
 }
 
-func (e *Endpoint) SendRequestCtx(ctx context.Context, conn net.Conn, m protocol.EndpointMessage) (*protocol.EndpointMessage, error) {
+func (e *Endpoint) tryParseMessage(packet *Packet) (message *EndpointMessage, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			switch val := e.(type) {
 
-	//conn.Lock()
+			case string:
+
+				err = errors.New(val)
+
+			case error:
+				err = val
+			default:
+				panic(e)
+			}
+		}
+	}()
+
+	switch int(packet.Type) {
+
+	case protocol.ENDPOINT_MESSAGE.Type():
+
+		decoder := e.codec.Decoder()
+
+		endpointID := decoder.EndpointId(packet)
+		format := decoder.Short(packet)
+
+		message = &EndpointMessage{
+			EndpointID:     endpointID,
+			EndpointFormat: format,
+		}
+
+		message.Parse(decoder, e.version, packet)
+
+	case protocol.ENDPOINT_FAILURE.Type():
+
+		panic(pp.Sprintln(string(packet.Data))) // TODO Гдето есть парсер
+
+	default:
+
+		return nil, &UnknownMessageError{
+			packet.Type,
+			packet.Data,
+			e,
+			ErrUnknownMessage}
+	}
+
+	return
+}
+
+func (e *Endpoint) tryFormatMessage(message *EndpointMessage, writer io.Writer) (err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			switch val := e.(type) {
+
+			case string:
+
+				err = errors.New(val)
+
+			case error:
+				err = val
+			default:
+				panic(e)
+			}
+		}
+	}()
+
+	encoder := e.codec.Encoder()
+	message.Format(encoder, e.version, writer)
+
+	return
+}
+
+func (m *EndpointMessage) Parse(decoder codec.Decoder, version int, reader io.Reader) {
+
+	kind := messages.EndpointMessageKind(decoder.Type(reader))
+	m.Kind = kind
+
+	switch kind {
+
+	case messages.VOID_MESSAGE_KIND:
+		return
+	case messages.EXCEPTION_KIND:
+
+		fail := &protocol.EndpointMessageFailure{EndpointID: m.EndpointID}
+		fail.Parse(decoder, reader)
+		m.Message = fail
+
+	case messages.MESSAGE_KIND:
+
+		respondType := decoder.Type(reader)
+		pp.Println(respondType)
+
+		var parser codec.BinaryParser
+		// TODO Сделать получение ответа по типу
+		parser.Parse(decoder, version, reader)
+
+		m.Message = parser
+	}
+
+	return
+
+}
+
+func (m *EndpointMessage) Format(encoder codec.Encoder, version int, w io.Writer) {
+
+	encoder.EndpointId(m.EndpointID, w)
+	encoder.Short(m.EndpointFormat, w)
+	encoder.Type(m.Kind, w)
+	encoder.Type(m.Type, w) // МАГИЯ без этого байта требует авторизации на центральном кластере
+
+	formatter := m.Message.(codec.BinaryWriter)
+	formatter.Format(encoder, version, w) // запись тебя сообщения
+
+}
+
+type EndpointMessage struct {
+	EndpointID     int
+	EndpointFormat int16
+	Kind           messages.EndpointMessageKind
+
+	Message interface{}
+	Type    serialize.Typed
+}
+
+func (e *Endpoint) SendRequest(ctx context.Context, req types.EndpointRequestMessage) (*EndpointMessage, error) {
 
 	if e.onRequest != nil {
 
-		_, err := e.onRequest(e, ctx, conn, m)
+		_, err := e.onRequest(e, ctx, e.conn, req)
 
 		if err != nil {
 			return nil, err
@@ -173,7 +341,17 @@ func (e *Endpoint) SendRequestCtx(ctx context.Context, conn net.Conn, m protocol
 
 	}
 
-	//conn.Unlock()
+	message := &EndpointMessage{
+		EndpointID:     e.id,
+		EndpointFormat: e.format,
+		Kind:           messages.EndpointMessageKind(req.Kind().Type()),
+		Message:        req,
+	}
+
+	answer, err := e.sendRequest(ctx, e.conn, message)
+
+	return answer, err
+
 }
 
 type Options struct {
@@ -300,7 +478,7 @@ func (p *EndpointPool) isStaleConn(cn *Conn) bool {
 	return false
 }
 
-func (p *EndpointPool) openEndpoint(c context.Context, pooled bool) (*Endpoint, error) {
+func (p *EndpointPool) openEndpoint(ctx context.Context, pooled bool) (*Endpoint, error) {
 	if p.closed() {
 		return nil, ErrClosed
 	}
@@ -309,7 +487,7 @@ func (p *EndpointPool) openEndpoint(c context.Context, pooled bool) (*Endpoint, 
 		return nil, p.getLastOpenError()
 	}
 
-	endpoint, err := p.opt.Opener(c)
+	endpoint, err := p.opt.Opener(ctx)
 	if err != nil {
 		p.setLastOpenError(err)
 		if atomic.AddUint32(&p.dialErrorsNum, 1) == uint32(p.opt.PoolSize) {
@@ -326,9 +504,10 @@ func (p *EndpointPool) openEndpoint(c context.Context, pooled bool) (*Endpoint, 
 func NewEndpoint(endpoint EndpointInfo) *Endpoint {
 
 	return &Endpoint{
-		ID:      endpoint.ID(),
-		Version: endpoint.Version(),
-		Format:  endpoint.Format(),
+		id:        endpoint.ID(),
+		version:   endpoint.Version(),
+		format:    endpoint.Format(),
+		serviceID: endpoint.ServiceID(),
 	}
 }
 

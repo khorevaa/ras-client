@@ -44,10 +44,6 @@ type AuthenticateAgentRequest struct {
 	User, Password string
 }
 
-func (_ AuthenticateAgentRequest) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
 func (_ AuthenticateAgentRequest) ResponseMessage() types.EndpointResponseMessage {
 	return nullEndpointResponse()
 }
