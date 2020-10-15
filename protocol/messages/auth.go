@@ -3,6 +3,7 @@ package messages
 import (
 	uuid "github.com/satori/go.uuid"
 	"github.com/v8platform/rac/protocol/codec"
+	"github.com/v8platform/rac/protocol/esig"
 	"github.com/v8platform/rac/protocol/types"
 	"io"
 )
@@ -15,6 +16,10 @@ import (
 type ClusterAuthenticateRequest struct {
 	ClusterID      uuid.UUID
 	User, Password string
+}
+
+func (r ClusterAuthenticateRequest) Sig() esig.ESIG {
+	return esig.FromUuid(r.ClusterID)
 }
 
 func (r ClusterAuthenticateRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
@@ -67,6 +72,10 @@ func (r AuthenticateAgentRequest) Format(encoder codec.Encoder, _ int, w io.Writ
 type AuthenticateInfobaseRequest struct {
 	ClusterID      uuid.UUID
 	User, Password string
+}
+
+func (r AuthenticateInfobaseRequest) Sig() esig.ESIG {
+	return esig.FromUuid(r.ClusterID)
 }
 
 func (_ AuthenticateInfobaseRequest) Kind() types.Typed {

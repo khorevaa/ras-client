@@ -3,6 +3,7 @@ package types
 import (
 	uuid "github.com/satori/go.uuid"
 	"github.com/v8platform/rac/protocol/codec"
+	"github.com/v8platform/rac/protocol/esig"
 	"github.com/v8platform/rac/serialize"
 	"io"
 )
@@ -56,7 +57,7 @@ type ResponseMessage interface {
 type EndpointRequestMessage interface {
 	Type() Typed
 	Format(encoder codec.Encoder, version int, w io.Writer)
-	//AuthSig() string
+	Sig() esig.ESIG
 }
 
 type EndpointResponseMessage interface {

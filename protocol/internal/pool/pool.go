@@ -1,18 +1,14 @@
 package pool
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"github.com/k0kubun/pp"
-	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/protocol"
-	"github.com/v8platform/rac/protocol/codec"
 	"github.com/v8platform/rac/protocol/messages"
 	"github.com/v8platform/rac/protocol/types"
-	"github.com/v8platform/rac/serialize"
-	"io"
-	"net"
+
+	uuid "github.com/satori/go.uuid"
+	"github.com/v8platform/rac/protocol/esig"
+
 	"sync"
 	"sync/atomic"
 	"time"
@@ -79,8 +75,18 @@ import (
 
 */
 
-type RequestNeedInfobaseAuth interface {
-	NeedInfobaseAuth()
+type EndpointPooler interface {
+	NewEndpoint(ctx context.Context) (*Endpoint, error)
+	CloseEndpoint(endpoint *Endpoint) error
+
+	Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error)
+	Put(context.Context, *Endpoint)
+	Remove(context.Context, *Endpoint, error)
+
+	Len() int
+	IdleLen() int
+
+	Close() error
 }
 
 var timers = sync.Pool{
@@ -97,273 +103,39 @@ var (
 	ErrPoolTimeout    = errors.New("protocol: endpoint pool timeout")
 )
 
-type EndpointInfo interface {
-	ID() int
-	Version() int
-	Format() int16
-	ServiceID() string
-	Codec() codec.Codec
-}
+func (p *EndpointPool) SetAuthHeader(uuid uuid.UUID, user, password string) {
 
-type Endpoint struct {
-	id        int
-	version   int
-	format    int16
-	serviceID string
-	codec     codec.Codec
-
-	conn      *Conn
-	createdAt time.Time
-	usedAt    uint32 // atomic
-	pooled    bool
-	Inited    bool
-
-	clusterAuth  uuid.UUID
-	infobaseAuth uuid.UUID
-
-	onRequest func(e *Endpoint, ctx context.Context, conn net.Conn, m protocol.EndpointMessage) (*protocol.EndpointMessage, error)
-}
-
-func (cn *Endpoint) UsedAt() time.Time {
-	unix := atomic.LoadUint32(&cn.usedAt)
-	return time.Unix(int64(unix), 0)
-}
-
-func (cn *Endpoint) SetUsedAt(tm time.Time) {
-	atomic.StoreUint32(&cn.usedAt, uint32(tm.Unix()))
-}
-
-func (e *Endpoint) ID() int {
-	panic("implement me")
-}
-
-func (e *Endpoint) Version() int {
-	panic("implement me")
-}
-
-func (e *Endpoint) Format() string {
-	panic("implement me")
-}
-
-func (e *Endpoint) ServiceID() string {
-	panic("implement me")
-}
-
-func (e *Endpoint) Codec() codec.Codec {
-	panic("implement me")
-}
-
-type UnknownMessageError struct {
-	Type     byte
-	Data     []byte
-	Endpoint *Endpoint
-	err      error
-}
-
-func (m *UnknownMessageError) Error() string {
-
-	return m.err.Error()
+	//p.authCacheMu.Lock()
+	//p.authCache[uuid] = struct {
+	//	user, password string
+	//}{user, password}
+	//p.authCacheMu.Unlock()
 
 }
 
-func (e *Endpoint) sendRequest(ctx context.Context, conn *Conn, message *EndpointMessage) (*EndpointMessage, error) {
-
-	body := bytes.NewBuffer([]byte{})
-
-	message.Format(e.codec.Encoder(), e.version, body)
-
-	packet := NewPacket(byte(message.Type().Type()), body.Bytes())
-
-	err := conn.SendPacket(packet)
-	if err != nil {
-		return nil, err
+func (p *EndpointPool) openEndpoint(ctx context.Context, conn *Conn) (*Endpoint, error) {
+	if p.closed() {
+		return nil, ErrClosed
 	}
 
-	answer, err := conn.GetPacket(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return e.tryParseMessage(answer)
-
-}
-
-func (e *Endpoint) sendVoidRequest(ctx context.Context, conn *Conn, m protocol.EndpointMessage) error {
-
-	body := bytes.NewBuffer([]byte{})
-
-	m.Format(e.codec.Encoder(), e.version, body)
-
-	packet := NewPacket(byte(m.Type().Type()), body.Bytes())
-
-	err := conn.SendPacket(packet)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (e *Endpoint) tryParseMessage(packet *Packet) (message *EndpointMessage, err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			switch val := e.(type) {
-
-			case string:
-
-				err = errors.New(val)
-
-			case error:
-				err = val
-			default:
-				panic(e)
-			}
-		}
-	}()
-
-	switch int(packet.Type) {
-
-	case protocol.ENDPOINT_MESSAGE.Type():
-
-		decoder := e.codec.Decoder()
-
-		endpointID := decoder.EndpointId(packet)
-		format := decoder.Short(packet)
-
-		message = &EndpointMessage{
-			EndpointID:     endpointID,
-			EndpointFormat: format,
-		}
-
-		message.Parse(decoder, e.version, packet)
-
-	case protocol.ENDPOINT_FAILURE.Type():
-
-		panic(pp.Sprintln(string(packet.Data))) // TODO Гдето есть парсер
-
-	default:
-
-		return nil, &UnknownMessageError{
-			packet.Type,
-			packet.Data,
-			e,
-			ErrUnknownMessage}
-	}
-
-	return
-}
-
-func (e *Endpoint) tryFormatMessage(message *EndpointMessage, writer io.Writer) (err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			switch val := e.(type) {
-
-			case string:
-
-				err = errors.New(val)
-
-			case error:
-				err = val
-			default:
-				panic(e)
-			}
-		}
-	}()
-
-	encoder := e.codec.Encoder()
-	message.Format(encoder, e.version, writer)
-
-	return
-}
-
-func (m *EndpointMessage) Parse(decoder codec.Decoder, version int, reader io.Reader) {
-
-	kind := messages.EndpointMessageKind(decoder.Type(reader))
-	m.Kind = kind
-
-	switch kind {
-
-	case messages.VOID_MESSAGE_KIND:
-		return
-	case messages.EXCEPTION_KIND:
-
-		fail := &protocol.EndpointMessageFailure{EndpointID: m.EndpointID}
-		fail.Parse(decoder, reader)
-		m.Message = fail
-
-	case messages.MESSAGE_KIND:
-
-		respondType := decoder.Type(reader)
-		pp.Println(respondType)
-
-		var parser codec.BinaryParser
-		// TODO Сделать получение ответа по типу
-		parser.Parse(decoder, version, reader)
-
-		m.Message = parser
-	}
-
-	return
-
-}
-
-func (m *EndpointMessage) Format(encoder codec.Encoder, version int, w io.Writer) {
-
-	encoder.EndpointId(m.EndpointID, w)
-	encoder.Short(m.EndpointFormat, w)
-	encoder.Type(m.Kind, w)
-	encoder.Type(m.Type, w) // МАГИЯ без этого байта требует авторизации на центральном кластере
-
-	formatter := m.Message.(codec.BinaryWriter)
-	formatter.Format(encoder, version, w) // запись тебя сообщения
-
-}
-
-type EndpointMessage struct {
-	EndpointID     int
-	EndpointFormat int16
-	Kind           messages.EndpointMessageKind
-
-	Message interface{}
-	Type    serialize.Typed
-}
-
-func (e *Endpoint) SendRequest(ctx context.Context, req types.EndpointRequestMessage) (*EndpointMessage, error) {
-
-	if e.onRequest != nil {
-
-		_, err := e.onRequest(e, ctx, e.conn, req)
+	if !conn.Inited {
+		err := p.opt.InitConnection(ctx, conn)
 
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
-	message := &EndpointMessage{
-		EndpointID:     e.id,
-		EndpointFormat: e.format,
-		Kind:           messages.EndpointMessageKind(req.Kind().Type()),
-		Message:        req,
+	openAck, err := p.opt.OpenEndpoint(ctx, conn)
+	if err != nil {
+		return nil, err
 	}
 
-	answer, err := e.sendRequest(ctx, e.conn, message)
+	endpoint := NewEndpoint(openAck)
+	endpoint.Inited = true
+	conn.endpoints = append(conn.endpoints, endpoint)
 
-	return answer, err
-
-}
-
-type Options struct {
-	Opener func(context.Context) (EndpointInfo, error)
-	Closer func(context.Context, EndpointInfo) error
-
-	PoolSize           int
-	MinIdleConns       int
-	MaxConnAge         time.Duration
-	PoolTimeout        time.Duration
-	IdleTimeout        time.Duration
-	IdleCheckFrequency time.Duration
+	return endpoint, nil
 }
 
 type EndpointPool struct {
@@ -371,37 +143,22 @@ type EndpointPool struct {
 
 	dialErrorsNum uint32 // atomic
 
+	_closed uint32 // atomic
+
 	lastDialErrorMu sync.RWMutex
 	lastDialError   error
 
-	openfunc  func(ctx context.Context) error
-	OnRequest func(ctx context.Context, req RequestNeedInfobaseAuth) error
-
-	authCache   map[uuid.UUID]struct{ user, password string }
-	authCacheMu sync.Mutex
-
-	_closed uint32 // atomic
-
 	queue chan struct{}
 
-	endpointsMu      sync.Mutex
-	endpoints        map[string][]*Endpoint // 1. UUID - Кластера  2 UUID - информационой базы
-	idleEndpoints    map[string][]*Endpoint
-	idleEndpointsLen int
-	poolSize         int
+	connsMu   sync.Mutex
+	conns     []*Conn
+	idleConns IdleConns
+
+	poolSize     int
+	idleConnsLen int
 }
 
-func (p *EndpointPool) SetAuthHeader(uuid uuid.UUID, user, password string) {
-
-	p.authCacheMu.Lock()
-	p.authCache[uuid] = struct {
-		user, password string
-	}{user, password}
-	p.authCacheMu.Unlock()
-
-}
-
-func (p *EndpointPool) Get(ctx context.Context, cluster, infobase uuid.UUID) (*Endpoint, error) {
+func (p *EndpointPool) NewEndpoint(ctx context.Context) (*Endpoint, error) {
 
 	if p.closed() {
 		return nil, ErrClosed
@@ -412,44 +169,197 @@ func (p *EndpointPool) Get(ctx context.Context, cluster, infobase uuid.UUID) (*E
 		return nil, err
 	}
 
-	hash := cluster.String() + "_" + infobase.String()
-
 	for {
-		p.endpointsMu.Lock()
-		cn := p.popIdle(hash)
-		p.endpointsMu.Unlock()
+		p.connsMu.Lock()
+		endpoint := p.popIdle(esig.ESIG{})
+		p.connsMu.Unlock()
 
-		if cn == nil {
+		if endpoint == nil {
 			break
 		}
 
-		if p.isStaleConn(cn) {
-			_ = p.CloseConn(cn)
+		if p.isStaleConn(endpoint.conn) {
+			_ = p.CloseConn(endpoint.conn)
 			continue
 		}
 
-		//atomic.AddUint32(&p.stats.Hits, 1)
-		return cn, nil
+		if !endpoint.Inited {
+			endpoint, err = p.openEndpoint(ctx, endpoint.conn)
+
+			if err != nil {
+				return nil, err
+			}
+
+		}
+
+		return endpoint, nil
 	}
 
-	newcn, err := p.newEndpoint(ctx, true)
+	newcn, err := p.newConn(ctx, true)
 	if err != nil {
 		p.freeTurn()
 		return nil, err
 	}
 
-	return newcn, nil
+	endpoint, err := p.openEndpoint(ctx, newcn)
+
+	return endpoint, err
 
 }
 
-func (p *EndpointPool) newEndpoint(c context.Context, pooled bool) (*Endpoint, error) {
-	cn, err := p.openEndpoint(c, pooled)
+func (p *EndpointPool) CloseEndpoint(endpoint *Endpoint) error {
+	panic("implement me")
+}
+
+var _ EndpointPooler = (*EndpointPool)(nil)
+
+func NewEndpointPool(opt *Options) *EndpointPool {
+	p := &EndpointPool{
+		opt: opt,
+
+		queue:     make(chan struct{}, opt.PoolSize),
+		conns:     make([]*Conn, 0, opt.PoolSize),
+		idleConns: make([]*Conn, 0, opt.PoolSize),
+	}
+
+	p.connsMu.Lock()
+	p.checkMinIdleConns()
+	p.connsMu.Unlock()
+
+	if opt.IdleTimeout > 0 && opt.IdleCheckFrequency > 0 {
+		go p.reaper(opt.IdleCheckFrequency)
+	}
+
+	return p
+}
+
+// Get returns existed connection from the pool or creates a new one.
+func (p *EndpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req types.EndpointRequestMessage) error {
+
+	if esig.IsNul(req.Sig()) {
+		return nil
+	}
+
+	if esig.Equal(endpoint.sig, req.Sig()) {
+		return nil
+	}
+
+	if !esig.HighEqual(endpoint.sig, req.Sig()) {
+
+		authMessage := endpoint.newEndpointMessage(messages.ClusterAuthenticateRequest{
+			ClusterID: req.Sig().High(),
+			User:      "",
+			Password:  "",
+		})
+
+		_, err := endpoint.sendRequest(ctx, authMessage)
+
+		return err
+	}
+
+	if uuid.Equal(req.Sig().Low(), uuid.Nil) {
+		return nil
+	}
+
+	authMessage := endpoint.newEndpointMessage(messages.AuthenticateInfobaseRequest{
+		ClusterID: req.Sig().High(),
+		User:      "",
+		Password:  "",
+	})
+
+	_, err := endpoint.sendRequest(ctx, authMessage)
+
+	return err
+}
+
+// Get returns existed connection from the pool or creates a new one.
+func (p *EndpointPool) Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error) {
+	if p.closed() {
+		return nil, ErrClosed
+	}
+
+	err := p.waitTurn(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	p.endpointsMu.Lock()
-	p.endpoints[clearHash] = append(p.endpoints[clearHash], cn)
+	for {
+		p.connsMu.Lock()
+		endpoint := p.popIdle(sig)
+		p.connsMu.Unlock()
+
+		if endpoint == nil {
+			break
+		}
+
+		if p.isStaleConn(endpoint.conn) {
+			_ = p.CloseConn(endpoint.conn)
+			continue
+		}
+
+		if !endpoint.Inited {
+			endpoint, err = p.openEndpoint(ctx, endpoint.conn)
+
+			if err != nil {
+				return nil, err
+			}
+
+		}
+
+		return endpoint, nil
+	}
+
+	newcn, err := p.newConn(ctx, true)
+	if err != nil {
+		p.freeTurn()
+		return nil, err
+	}
+
+	endpoint, err := p.openEndpoint(ctx, newcn)
+
+	return endpoint, err
+}
+
+func (p *EndpointPool) checkMinIdleConns() {
+	if p.opt.MinIdleConns == 0 {
+		return
+	}
+	for p.poolSize < p.opt.PoolSize && p.idleConnsLen < p.opt.MinIdleConns {
+		p.poolSize++
+		p.idleConnsLen++
+		go func() {
+			err := p.addIdleConn()
+			if err != nil {
+				p.connsMu.Lock()
+				p.poolSize--
+				p.idleConnsLen--
+				p.connsMu.Unlock()
+			}
+		}()
+	}
+}
+
+func (p *EndpointPool) addIdleConn() error {
+	cn, err := p.dialConn(context.TODO(), true)
+	if err != nil {
+		return err
+	}
+
+	p.connsMu.Lock()
+	p.conns = append(p.conns, cn)
+	p.idleConns = append(p.idleConns, cn)
+	p.connsMu.Unlock()
+	return nil
+}
+
+func (p *EndpointPool) newConn(c context.Context, pooled bool) (*Conn, error) {
+	cn, err := p.dialConn(c, pooled)
+	if err != nil {
+		return nil, err
+	}
+
+	p.connsMu.Lock()
+	p.conns = append(p.conns, cn)
 	if pooled {
 		// If pool is full remove the cn on next Put.
 		if p.poolSize >= p.opt.PoolSize {
@@ -458,151 +368,67 @@ func (p *EndpointPool) newEndpoint(c context.Context, pooled bool) (*Endpoint, e
 			p.poolSize++
 		}
 	}
-	p.endpointsMu.Unlock()
+	p.connsMu.Unlock()
 	return cn, nil
 }
 
-func (p *EndpointPool) isStaleConn(cn *Conn) bool {
-	if p.opt.IdleTimeout == 0 && p.opt.MaxConnAge == 0 {
-		return false
-	}
-
-	now := time.Now()
-	if p.opt.IdleTimeout > 0 && now.Sub(cn.UsedAt()) >= p.opt.IdleTimeout {
-		return true
-	}
-	if p.opt.MaxConnAge > 0 && now.Sub(cn.createdAt) >= p.opt.MaxConnAge {
-		return true
-	}
-
-	return false
-}
-
-func (p *EndpointPool) openEndpoint(ctx context.Context, pooled bool) (*Endpoint, error) {
+func (p *EndpointPool) dialConn(c context.Context, pooled bool) (*Conn, error) {
 	if p.closed() {
 		return nil, ErrClosed
 	}
 
 	if atomic.LoadUint32(&p.dialErrorsNum) >= uint32(p.opt.PoolSize) {
-		return nil, p.getLastOpenError()
+		return nil, p.getLastDialError()
 	}
 
-	endpoint, err := p.opt.Opener(ctx)
+	netConn, err := p.opt.Dialer(c)
 	if err != nil {
-		p.setLastOpenError(err)
+		p.setLastDialError(err)
 		if atomic.AddUint32(&p.dialErrorsNum, 1) == uint32(p.opt.PoolSize) {
-			go p.tryOpen()
+			go p.tryDial()
 		}
 		return nil, err
 	}
 
-	cn := NewEndpoint(endpoint)
+	cn := NewConn(netConn)
 	cn.pooled = pooled
 	return cn, nil
 }
 
-func NewEndpoint(endpoint EndpointInfo) *Endpoint {
-
-	return &Endpoint{
-		id:        endpoint.ID(),
-		version:   endpoint.Version(),
-		format:    endpoint.Format(),
-		serviceID: endpoint.ServiceID(),
-	}
-}
-
-func (p *EndpointPool) tryOpen() {
+func (p *EndpointPool) tryDial() {
 	for {
 		if p.closed() {
 			return
 		}
 
-		endpoint, err := p.opt.Opener(context.TODO())
+		conn, err := p.opt.Dialer(context.TODO())
 		if err != nil {
-			p.setLastOpenError(err)
+			p.setLastDialError(err)
 			time.Sleep(time.Second)
 			continue
 		}
 
 		atomic.StoreUint32(&p.dialErrorsNum, 0)
-		_ = p.opt.Closer(context.TODO(), endpoint)
+		_ = conn.Close()
 		return
 	}
 }
 
-func (p *EndpointPool) popIdle(hash string) *Endpoint {
-
-	if p.idleEndpointsLen == 0 {
-		return nil
-	}
-
-	idleendpoints, ok := p.idleEndpoints[hash]
-	if !ok {
-		return p.popIdle(clearHash)
-	}
-
-	if len(idleendpoints) == 0 {
-		return nil
-	}
-
-	idx := len(idleendpoints) - 1
-	cn := idleendpoints[idx]
-
-	p.idleEndpoints[hash] = idleendpoints[:idx]
-	p.idleEndpointsLen--
-	p.checkMinIdleEndpoints()
-	return cn
-}
-
-var clearHash = uuid.UUID{}.String() + "_" + uuid.UUID{}.String()
-
-func (p *EndpointPool) checkMinIdleEndpoints() {
-	if p.opt.MinIdleConns == 0 {
-		return
-	}
-	for p.poolSize < p.opt.PoolSize && p.idleEndpointsLen < p.opt.MinIdleConns {
-		p.poolSize++
-		p.idleEndpointsLen++
-		go func() {
-
-			err := p.addIdleEndpoint()
-			if err != nil {
-				p.endpointsMu.Lock()
-				p.poolSize--
-				p.idleEndpointsLen--
-				p.endpointsMu.Unlock()
-			}
-		}()
-	}
-}
-
-func (p *EndpointPool) setLastOpenError(err error) {
+func (p *EndpointPool) setLastDialError(err error) {
 	p.lastDialErrorMu.Lock()
 	p.lastDialError = err
 	p.lastDialErrorMu.Unlock()
 }
 
-func (p *EndpointPool) getLastOpenError() error {
+func (p *EndpointPool) getLastDialError() error {
 	p.lastDialErrorMu.RLock()
 	err := p.lastDialError
 	p.lastDialErrorMu.RUnlock()
 	return err
 }
 
-func (p *EndpointPool) addIdleEndpoint() error {
-
-	newEndpoint := &Endpoint{}
-
-	p.endpointsMu.Lock()
-	p.endpoints[clearHash] = append(p.endpoints[clearHash], newEndpoint)
-	p.idleEndpoints[clearHash] = append(p.endpoints[clearHash], newEndpoint)
-	p.endpointsMu.Unlock()
-
-	return nil
-}
-
-func (p *EndpointPool) closed() bool {
-	return atomic.LoadUint32(&p._closed) == 1
+func (p *EndpointPool) getTurn() {
+	p.queue <- struct{}{}
 }
 
 func (p *EndpointPool) waitTurn(c context.Context) error {
@@ -640,53 +466,183 @@ func (p *EndpointPool) waitTurn(c context.Context) error {
 		return ErrPoolTimeout
 	}
 }
-func (p *EndpointPool) getTurn() {
-	p.queue <- struct{}{}
-}
 
 func (p *EndpointPool) freeTurn() {
 	<-p.queue
 }
 
-func (p *EndpointPool) CloseConn(cn *Endpoint) error {
+func (p *EndpointPool) popIdle(sig esig.ESIG) *Endpoint {
+	if len(p.idleConns) == 0 {
+		return nil
+	}
+
+	endpoint := p.idleConns.Pop(sig)
+
+	if endpoint == nil {
+		return nil
+	}
+
+	p.idleConnsLen--
+	p.checkMinIdleConns()
+	return endpoint
+}
+
+func (p *EndpointPool) Put(ctx context.Context, cn *Endpoint) {
+	if !cn.pooled {
+		p.Remove(ctx, cn, nil)
+		return
+	}
+
+	p.connsMu.Lock()
+	p.idleConns = append(p.idleConns, cn.conn)
+	p.idleConnsLen++
+	p.connsMu.Unlock()
+	p.freeTurn()
+}
+
+func (p *EndpointPool) Remove(ctx context.Context, cn *Endpoint, reason error) {
+	p.removeConnWithLock(cn.conn)
+	p.freeTurn()
+	_ = p.closeConn(cn.conn)
+}
+
+func (p *EndpointPool) CloseConn(cn *Conn) error {
 	p.removeConnWithLock(cn)
 	return p.closeConn(cn)
 }
 
-func (p *EndpointPool) removeConnWithLock(cn *Endpoint) {
-	p.endpointsMu.Lock()
+func (p *EndpointPool) removeConnWithLock(cn *Conn) {
+	p.connsMu.Lock()
 	p.removeConn(cn)
-	p.endpointsMu.Unlock()
+	p.connsMu.Unlock()
 }
 
-func (p *EndpointPool) removeConn(cn *Endpoint) {
-
-	for _, endpoints := range p.endpoints {
-
-		for i, c := range endpoints {
-			if c == cn {
-				endpoints = append(endpoints[:i], endpoints[i+1:]...)
-				if cn.pooled {
-					p.poolSize--
-					p.checkMinIdleEndpoints()
-				}
-				return
+func (p *EndpointPool) removeConn(cn *Conn) {
+	for i, c := range p.conns {
+		if c == cn {
+			p.conns = append(p.conns[:i], p.conns[i+1:]...)
+			if cn.pooled {
+				p.poolSize--
+				p.checkMinIdleConns()
 			}
+			return
 		}
+	}
+}
 
+func (p *EndpointPool) closeConn(cn *Conn) error {
+	if p.opt.OnClose != nil {
+		_ = p.opt.OnClose(cn)
+	}
+	return cn.Close()
+}
+
+// Len returns total number of connections.
+func (p *EndpointPool) Len() int {
+	p.connsMu.Lock()
+	n := len(p.conns)
+	p.connsMu.Unlock()
+	return n
+}
+
+// IdleLen returns number of idle connections.
+func (p *EndpointPool) IdleLen() int {
+	p.connsMu.Lock()
+	n := p.idleConnsLen
+	p.connsMu.Unlock()
+	return n
+}
+
+func (p *EndpointPool) closed() bool {
+	return atomic.LoadUint32(&p._closed) == 1
+}
+
+func (p *EndpointPool) Close() error {
+	if !atomic.CompareAndSwapUint32(&p._closed, 0, 1) {
+		return ErrClosed
 	}
 
+	var firstErr error
+	p.connsMu.Lock()
+	for _, cn := range p.conns {
+		if err := p.closeConn(cn); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	p.conns = nil
+	p.poolSize = 0
+	p.idleConns = nil
+	p.idleConnsLen = 0
+	p.connsMu.Unlock()
+
+	return firstErr
 }
 
-func (p *EndpointPool) closeConn(cn *Endpoint) error {
+func (p *EndpointPool) reaper(frequency time.Duration) {
+	ticker := time.NewTicker(frequency)
+	defer ticker.Stop()
 
-	return p.opt.Closer(context.Background(), cn)
-
+	for range ticker.C {
+		if p.closed() {
+			break
+		}
+		_, err := p.ReapStaleConns()
+		if err != nil {
+			continue
+		}
+	}
 }
 
-type exchange struct {
-	ID int16
+func (p *EndpointPool) ReapStaleConns() (int, error) {
+	var n int
+	for {
+		p.getTurn()
 
-	authCluster  uuid.UUID
-	authInfobase uuid.UUID
+		p.connsMu.Lock()
+		cn := p.reapStaleConn()
+		p.connsMu.Unlock()
+
+		p.freeTurn()
+
+		if cn != nil {
+			_ = p.closeConn(cn)
+			n++
+		} else {
+			break
+		}
+	}
+	return n, nil
+}
+
+func (p *EndpointPool) reapStaleConn() *Conn {
+	if len(p.idleConns) == 0 {
+		return nil
+	}
+
+	cn := p.idleConns[0]
+	if !p.isStaleConn(cn) {
+		return nil
+	}
+
+	p.idleConns = append(p.idleConns[:0], p.idleConns[1:]...)
+	p.idleConnsLen--
+	p.removeConn(cn)
+
+	return cn
+}
+
+func (p *EndpointPool) isStaleConn(cn *Conn) bool {
+	if p.opt.IdleTimeout == 0 && p.opt.MaxConnAge == 0 {
+		return false
+	}
+
+	now := time.Now()
+	if p.opt.IdleTimeout > 0 && now.Sub(cn.UsedAt()) >= p.opt.IdleTimeout {
+		return true
+	}
+	if p.opt.MaxConnAge > 0 && now.Sub(cn.createdAt) >= p.opt.MaxConnAge {
+		return true
+	}
+
+	return false
 }

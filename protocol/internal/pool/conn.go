@@ -24,6 +24,8 @@ type Conn struct {
 	netConn net.Conn
 	onError func(err IOError)
 
+	endpoints []*Endpoint
+
 	createdAt time.Time
 	usedAt    uint32 // atomic
 	pooled    bool
@@ -44,6 +46,7 @@ func NewConn(netConn net.Conn) *Conn {
 func (cn *Conn) SendPacket(packet *Packet) error {
 
 	err := packet.Write(cn.netConn)
+	cn.SetUsedAt(time.Now())
 	return err
 }
 
