@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/k0kubun/pp"
 	"github.com/v8platform/rac/protocol/codec"
+	"github.com/v8platform/rac/protocol/internal/pool"
 	"github.com/v8platform/rac/protocol/types"
 	"io"
 	"net"
@@ -25,10 +26,11 @@ const maxResponseChunkSize = 1460
 type Client struct {
 	addr  string
 	laddr net.Addr
-	conn  net.Conn
 
 	ctx          context.Context
 	stopRoutines context.CancelFunc // остановить ping, read, и подобные горутины
+
+	pool pool.EndpointPool
 
 	// каналы, которые ожидают ответа rpc
 	ackRespond chan ackRespond
@@ -49,14 +51,242 @@ func NewClient(addr string) *Client {
 
 	m := new(Client)
 	m.addr = addr
+	m.codec = codec.NewCodec1_0()
+	m.pool = pool.NewEndpointPool(&pool.Options{
+		Dialer:             m.dialfunc,
+		OpenEndpoint:       m.openEndpoint,
+		CloseEndpoint:      m.closeEndpoint,
+		InitConnection:     m.initConnection,
+		PoolSize:           10,
+		MinIdleConns:       2,
+		MaxConnAge:         time.Hour,
+		IdleTimeout:        time.Minute,
+		IdleCheckFrequency: 2 * time.Minute,
+	})
 
 	m.ackRespond = make(chan ackRespond)
 	m.responses = make(chan rawResponse)
 	m.endpoints = make(map[int]*endpoint)
-	m.codec = codec.NewCodec1_0()
+	m.serviceVersion = serviceVersions[len(serviceVersions)-1]
 	m.resetAck()
 
 	return m
+}
+
+func (c *Client) initConnection(ctx context.Context, conn *pool.Conn) error {
+
+	negotiateMessage := NewNegotiateMessage(protocolVersion, c.codec.Version())
+
+	err := c.sendRequest(conn, negotiateMessage)
+
+	if err != nil {
+		return err
+	}
+
+	err = c.sendRequest(conn, &ConnectMessage{params: map[string]interface{}{
+		"connect.timeout": int64(2000),
+	}})
+
+	packet, err := conn.GetPacket(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	answer, err := c.tryParseMessage(packet)
+
+	if err != nil {
+		return err
+	}
+
+	if _, ok := answer.(*ConnectMessageAck); !ok {
+		return errors.New("unknown ack")
+	}
+
+	return nil
+}
+
+func (c *Client) openEndpoint(ctx context.Context, conn *pool.Conn) (info pool.EndpointInfo, err error) {
+
+	var ack *OpenEndpointMessageAck
+
+	ack, err = c.tryOpenEndpoint(ctx, conn)
+	if err != nil {
+
+		supportedVersion := detectSupportedVersion(err)
+		if len(supportedVersion) > 0 {
+			return nil, errors.New(pp.Sprint("ras no supported service version", serviceVersions))
+		}
+
+		c.serviceVersion = supportedVersion
+		ack, err = c.tryOpenEndpoint(ctx, conn)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	endpointVersion, err := strconv.ParseFloat(ack.Version, 10)
+	if err != nil {
+		return nil, err
+	}
+
+	return endpointInfo{
+		id:        ack.EndpointID,
+		version:   int(endpointVersion),
+		format:    defaultFormat,
+		serviceID: ack.ServiceID,
+		codec:     c.codec,
+	}, nil
+}
+
+type endpointInfo struct {
+	id        int
+	version   int
+	format    int16
+	serviceID string
+	codec     codec.Codec
+}
+
+func (e endpointInfo) ID() int {
+	return e.id
+}
+
+func (e endpointInfo) Version() int {
+	return e.version
+}
+
+func (e endpointInfo) Format() int16 {
+	return e.format
+}
+
+func (e endpointInfo) ServiceID() string {
+	return e.serviceID
+}
+
+func (e endpointInfo) Codec() codec.Codec {
+	return e.codec
+}
+
+func (c *Client) tryOpenEndpoint(ctx context.Context, conn *pool.Conn) (*OpenEndpointMessageAck, error) {
+
+	err := c.sendRequest(conn, &OpenEndpointMessage{Version: c.serviceVersion})
+
+	packet, err := conn.GetPacket(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	answer, err := c.tryParseMessage(packet)
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch t := answer.(type) {
+
+	case *EndpointFailure:
+
+		return nil, t
+
+	case *OpenEndpointMessageAck:
+
+		return t, nil
+
+	default:
+		panic("unknown answer type")
+	}
+
+}
+
+func (c *Client) closeEndpoint(ctx context.Context, conn *pool.Conn, endpoint *pool.Endpoint) error {
+
+	return nil
+}
+func (c *Client) sendRequest(conn *pool.Conn, message types.RequestMessage) error {
+
+	body := bytes.NewBuffer([]byte{})
+	message.Format(c.codec.Encoder(), body)
+	packet := pool.NewPacket(byte(message.Type().Type()), body.Bytes())
+
+	err := conn.SendPacket(packet)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) tryParseMessage(packet *pool.Packet) (message types.ResponseMessage, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			switch val := e.(type) {
+
+			case string:
+
+				err = errors.New(val)
+
+			case error:
+				err = val
+			default:
+				panic(e)
+			}
+		}
+	}()
+
+	switch int(packet.Type) {
+
+	case CONNECT_ACK.Type():
+
+		decoder := c.codec.Decoder()
+
+		message = &ConnectMessageAck{}
+		message.Parse(decoder, packet)
+
+	case KEEP_ALIVE.Type():
+		// nothing
+	case ENDPOINT_OPEN_ACK.Type():
+
+		decoder := c.codec.Decoder()
+
+		message = &OpenEndpointMessageAck{}
+		message.Parse(decoder, packet)
+
+	case ENDPOINT_FAILURE.Type():
+
+		decoder := c.codec.Decoder()
+
+		message = &EndpointFailure{}
+		message.Parse(decoder, packet)
+
+	case NULL_TYPE.Type():
+
+		panic(NULL_TYPE.String())
+
+	default:
+
+		panic(packet)
+	}
+
+	return
+}
+
+func (c *Client) dialfunc(ctx context.Context) (net.Conn, error) {
+
+	_, err := net.ResolveTCPAddr("tcp", c.addr)
+	if err != nil {
+		return nil, errors.Wrap(err, "resolving tcp")
+	}
+
+	var dialer net.Dialer
+
+	conn, err := dialer.DialContext(ctx, "tcp", c.addr)
+	if err != nil {
+		return nil, errors.Wrap(err, "dialing tcp")
+	}
+
+	return conn, nil
+
 }
 
 func (c *Client) CreateConnection() error {

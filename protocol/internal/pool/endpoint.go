@@ -277,7 +277,7 @@ func (e *Endpoint) SendRequest(ctx context.Context, req types.EndpointRequestMes
 	}
 
 	message := e.newEndpointMessage(req)
-	answer, err := e.sendRequest(ctx, e.conn, message)
+	answer, err := e.sendRequest(ctx, message)
 
 	return answer, err
 

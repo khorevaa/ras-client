@@ -3,11 +3,10 @@ package pool
 import (
 	"context"
 	"errors"
-	"github.com/v8platform/rac/protocol/messages"
-	"github.com/v8platform/rac/protocol/types"
-
 	uuid "github.com/satori/go.uuid"
 	"github.com/v8platform/rac/protocol/esig"
+	"github.com/v8platform/rac/protocol/messages"
+	"github.com/v8platform/rac/protocol/types"
 
 	"sync"
 	"sync/atomic"
@@ -75,19 +74,11 @@ import (
 
 */
 
-type EndpointPooler interface {
-	NewEndpoint(ctx context.Context) (*Endpoint, error)
-	CloseEndpoint(endpoint *Endpoint) error
-
-	Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error)
-	Put(context.Context, *Endpoint)
-	Remove(context.Context, *Endpoint, error)
-
-	Len() int
-	IdleLen() int
-
-	Close() error
-}
+var (
+	ErrClosed         = errors.New("protocol: pool is closed")
+	ErrUnknownMessage = errors.New("protocol: unknown message packet")
+	ErrPoolTimeout    = errors.New("protocol: endpoint pool timeout")
+)
 
 var timers = sync.Pool{
 	New: func() interface{} {
@@ -97,48 +88,49 @@ var timers = sync.Pool{
 	},
 }
 
-var (
-	ErrClosed         = errors.New("protocol: pool is closed")
-	ErrUnknownMessage = errors.New("protocol: unknown message packet")
-	ErrPoolTimeout    = errors.New("protocol: endpoint pool timeout")
-)
+var _ EndpointPool = (*endpointPool)(nil)
 
-func (p *EndpointPool) SetAuthHeader(uuid uuid.UUID, user, password string) {
+func NewEndpointPool(opt *Options) EndpointPool {
+	p := &endpointPool{
+		opt:             opt,
+		queue:           make(chan struct{}, opt.PoolSize),
+		conns:           make([]*Conn, 0, opt.PoolSize),
+		idleConns:       make([]*Conn, 0, opt.PoolSize),
+		authInfobaseIdx: make(map[uuid.UUID]struct{ user, password string }),
+		authClusterIdx:  make(map[uuid.UUID]struct{ user, password string }),
+	}
 
-	//p.authCacheMu.Lock()
-	//p.authCache[uuid] = struct {
-	//	user, password string
-	//}{user, password}
-	//p.authCacheMu.Unlock()
+	p.connsMu.Lock()
+	p.checkMinIdleConns()
+	p.connsMu.Unlock()
 
+	if opt.IdleTimeout > 0 && opt.IdleCheckFrequency > 0 {
+		go p.reaper(opt.IdleCheckFrequency)
+	}
+
+	return p
 }
 
-func (p *EndpointPool) openEndpoint(ctx context.Context, conn *Conn) (*Endpoint, error) {
-	if p.closed() {
-		return nil, ErrClosed
-	}
+type EndpointPool interface {
+	NewEndpoint(ctx context.Context) (*Endpoint, error)
+	CloseEndpoint(endpoint *Endpoint) error
 
-	if !conn.Inited {
-		err := p.opt.InitConnection(ctx, conn)
+	Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error)
+	Put(ctx context.Context, endpoint *Endpoint)
+	Remove(ctx context.Context, endpoint *Endpoint, err error)
 
-		if err != nil {
-			return nil, err
-		}
-	}
+	Len() int
+	IdleLen() int
 
-	openAck, err := p.opt.OpenEndpoint(ctx, conn)
-	if err != nil {
-		return nil, err
-	}
+	Close() error
 
-	endpoint := NewEndpoint(openAck)
-	endpoint.Inited = true
-	conn.endpoints = append(conn.endpoints, endpoint)
-
-	return endpoint, nil
+	SetClusterAuth(id uuid.UUID, user, password string)
+	SetInfobaseAuth(id uuid.UUID, user, password string)
+	GetClusterAuth(id uuid.UUID) (user, password string)
+	GetInfobaseAuth(id uuid.UUID) (user, password string)
 }
 
-type EndpointPool struct {
+type endpointPool struct {
 	opt *Options
 
 	dialErrorsNum uint32 // atomic
@@ -156,9 +148,12 @@ type EndpointPool struct {
 
 	poolSize     int
 	idleConnsLen int
+
+	authClusterIdx  map[uuid.UUID]struct{ user, password string }
+	authInfobaseIdx map[uuid.UUID]struct{ user, password string }
 }
 
-func (p *EndpointPool) NewEndpoint(ctx context.Context) (*Endpoint, error) {
+func (p *endpointPool) NewEndpoint(ctx context.Context) (*Endpoint, error) {
 
 	if p.closed() {
 		return nil, ErrClosed
@@ -207,73 +202,21 @@ func (p *EndpointPool) NewEndpoint(ctx context.Context) (*Endpoint, error) {
 
 }
 
-func (p *EndpointPool) CloseEndpoint(endpoint *Endpoint) error {
-	panic("implement me")
-}
-
-var _ EndpointPooler = (*EndpointPool)(nil)
-
-func NewEndpointPool(opt *Options) *EndpointPool {
-	p := &EndpointPool{
-		opt: opt,
-
-		queue:     make(chan struct{}, opt.PoolSize),
-		conns:     make([]*Conn, 0, opt.PoolSize),
-		idleConns: make([]*Conn, 0, opt.PoolSize),
+func (p *endpointPool) Put(ctx context.Context, cn *Endpoint) {
+	if !cn.pooled {
+		p.Remove(ctx, cn, nil)
+		return
 	}
 
 	p.connsMu.Lock()
-	p.checkMinIdleConns()
+	p.idleConns = append(p.idleConns, cn.conn)
+	p.idleConnsLen++
 	p.connsMu.Unlock()
-
-	if opt.IdleTimeout > 0 && opt.IdleCheckFrequency > 0 {
-		go p.reaper(opt.IdleCheckFrequency)
-	}
-
-	return p
+	p.freeTurn()
 }
 
 // Get returns existed connection from the pool or creates a new one.
-func (p *EndpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req types.EndpointRequestMessage) error {
-
-	if esig.IsNul(req.Sig()) {
-		return nil
-	}
-
-	if esig.Equal(endpoint.sig, req.Sig()) {
-		return nil
-	}
-
-	if !esig.HighEqual(endpoint.sig, req.Sig()) {
-
-		authMessage := endpoint.newEndpointMessage(messages.ClusterAuthenticateRequest{
-			ClusterID: req.Sig().High(),
-			User:      "",
-			Password:  "",
-		})
-
-		_, err := endpoint.sendRequest(ctx, authMessage)
-
-		return err
-	}
-
-	if uuid.Equal(req.Sig().Low(), uuid.Nil) {
-		return nil
-	}
-
-	authMessage := endpoint.newEndpointMessage(messages.AuthenticateInfobaseRequest{
-		ClusterID: req.Sig().High(),
-		User:      "",
-		Password:  "",
-	})
-
-	_, err := endpoint.sendRequest(ctx, authMessage)
-
-	return err
-}
-
-// Get returns existed connection from the pool or creates a new one.
-func (p *EndpointPool) Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error) {
+func (p *endpointPool) Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error) {
 	if p.closed() {
 		return nil, ErrClosed
 	}
@@ -320,7 +263,200 @@ func (p *EndpointPool) Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error
 	return endpoint, err
 }
 
-func (p *EndpointPool) checkMinIdleConns() {
+func (p *endpointPool) Remove(ctx context.Context, cn *Endpoint, reason error) {
+	p.removeConnWithLock(cn.conn)
+	p.freeTurn()
+	_ = p.closeConn(cn.conn)
+}
+
+func (p *endpointPool) CloseConn(cn *Conn) error {
+	p.removeConnWithLock(cn)
+	return p.closeConn(cn)
+}
+
+func (p *endpointPool) SetClusterAuth(id uuid.UUID, user, password string) {
+
+	p.authClusterIdx[id] = struct{ user, password string }{user: user, password: password}
+
+}
+
+func (p *endpointPool) SetInfobaseAuth(id uuid.UUID, user, password string) {
+
+	p.authInfobaseIdx[id] = struct{ user, password string }{user: user, password: password}
+
+}
+
+func (p *endpointPool) GetClusterAuth(id uuid.UUID) (user, password string) {
+
+	return p.getAuth(p.authClusterIdx, id)
+}
+
+func (p *endpointPool) GetInfobaseAuth(id uuid.UUID) (user, password string) {
+
+	return p.getAuth(p.authInfobaseIdx, id)
+}
+
+// Len returns total number of connections.
+func (p *endpointPool) Len() int {
+	p.connsMu.Lock()
+	n := len(p.conns)
+	p.connsMu.Unlock()
+	return n
+}
+
+// IdleLen returns number of idle connections.
+func (p *endpointPool) IdleLen() int {
+	p.connsMu.Lock()
+	n := p.idleConnsLen
+	p.connsMu.Unlock()
+	return n
+}
+
+func (p *endpointPool) Close() error {
+	if !atomic.CompareAndSwapUint32(&p._closed, 0, 1) {
+		return ErrClosed
+	}
+
+	var firstErr error
+	p.connsMu.Lock()
+	for _, cn := range p.conns {
+		if err := p.closeConn(cn); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	p.conns = nil
+	p.poolSize = 0
+	p.idleConns = nil
+	p.idleConnsLen = 0
+	p.connsMu.Unlock()
+
+	return firstErr
+}
+
+func (p *endpointPool) CloseEndpoint(endpoint *Endpoint) error {
+	panic("implement me")
+}
+
+func (p *endpointPool) ReapStaleConns() (int, error) {
+	var n int
+	for {
+		p.getTurn()
+
+		p.connsMu.Lock()
+		cn := p.reapStaleConn()
+		p.connsMu.Unlock()
+
+		p.freeTurn()
+
+		if cn != nil {
+			_ = p.closeConn(cn)
+			n++
+		} else {
+			break
+		}
+	}
+	return n, nil
+}
+
+func (p *endpointPool) openEndpoint(ctx context.Context, conn *Conn) (*Endpoint, error) {
+	if p.closed() {
+		return nil, ErrClosed
+	}
+
+	if !conn.Inited {
+		err := p.opt.InitConnection(ctx, conn)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	openAck, err := p.opt.OpenEndpoint(ctx, conn)
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint := NewEndpoint(openAck)
+	endpoint.Inited = true
+	endpoint.onRequest = p.onRequest
+	conn.endpoints = append(conn.endpoints, endpoint)
+
+	return endpoint, nil
+}
+
+// Get returns existed connection from the pool or creates a new one.
+func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req types.EndpointRequestMessage) error {
+
+	sig := req.Sig()
+
+	if esig.IsNul(sig) {
+		return nil
+	}
+
+	if esig.Equal(endpoint.sig, sig) {
+		return nil
+	}
+
+	clusterID, infobaseID := sig.High(), sig.Low()
+
+	if !esig.HighBoundEqual(endpoint.sig, clusterID) {
+
+		user, password := p.GetClusterAuth(clusterID)
+
+		authMessage := endpoint.newEndpointMessage(messages.ClusterAuthenticateRequest{
+			ClusterID: clusterID,
+			User:      user,
+			Password:  password,
+		})
+
+		_, err := endpoint.sendRequest(ctx, authMessage)
+
+		if err != nil {
+			return err
+		}
+
+		endpoint.sig = esig.FromUuid(clusterID)
+
+	}
+
+	if uuid.Equal(infobaseID, uuid.Nil) {
+		return nil
+	}
+
+	user, password := p.GetInfobaseAuth(clusterID)
+
+	authMessage := endpoint.newEndpointMessage(messages.AuthenticateInfobaseRequest{
+		ClusterID: clusterID,
+		User:      user,
+		Password:  password,
+	})
+
+	_, err := endpoint.sendRequest(ctx, authMessage)
+
+	if err != nil {
+		return err
+	}
+
+	endpoint.sig = sig
+
+	return nil
+}
+
+func (p *endpointPool) getAuth(idx map[uuid.UUID]struct{ user, password string }, id uuid.UUID) (user, password string) {
+
+	if auth, ok := idx[id]; ok {
+		user, password = auth.user, auth.password
+		return
+	}
+
+	if auth, ok := idx[uuid.Nil]; ok {
+		user, password = auth.user, auth.password
+	}
+
+	return
+}
+
+func (p *endpointPool) checkMinIdleConns() {
 	if p.opt.MinIdleConns == 0 {
 		return
 	}
@@ -339,7 +475,7 @@ func (p *EndpointPool) checkMinIdleConns() {
 	}
 }
 
-func (p *EndpointPool) addIdleConn() error {
+func (p *endpointPool) addIdleConn() error {
 	cn, err := p.dialConn(context.TODO(), true)
 	if err != nil {
 		return err
@@ -352,7 +488,7 @@ func (p *EndpointPool) addIdleConn() error {
 	return nil
 }
 
-func (p *EndpointPool) newConn(c context.Context, pooled bool) (*Conn, error) {
+func (p *endpointPool) newConn(c context.Context, pooled bool) (*Conn, error) {
 	cn, err := p.dialConn(c, pooled)
 	if err != nil {
 		return nil, err
@@ -372,7 +508,7 @@ func (p *EndpointPool) newConn(c context.Context, pooled bool) (*Conn, error) {
 	return cn, nil
 }
 
-func (p *EndpointPool) dialConn(c context.Context, pooled bool) (*Conn, error) {
+func (p *endpointPool) dialConn(c context.Context, pooled bool) (*Conn, error) {
 	if p.closed() {
 		return nil, ErrClosed
 	}
@@ -395,7 +531,7 @@ func (p *EndpointPool) dialConn(c context.Context, pooled bool) (*Conn, error) {
 	return cn, nil
 }
 
-func (p *EndpointPool) tryDial() {
+func (p *endpointPool) tryDial() {
 	for {
 		if p.closed() {
 			return
@@ -414,24 +550,24 @@ func (p *EndpointPool) tryDial() {
 	}
 }
 
-func (p *EndpointPool) setLastDialError(err error) {
+func (p *endpointPool) setLastDialError(err error) {
 	p.lastDialErrorMu.Lock()
 	p.lastDialError = err
 	p.lastDialErrorMu.Unlock()
 }
 
-func (p *EndpointPool) getLastDialError() error {
+func (p *endpointPool) getLastDialError() error {
 	p.lastDialErrorMu.RLock()
 	err := p.lastDialError
 	p.lastDialErrorMu.RUnlock()
 	return err
 }
 
-func (p *EndpointPool) getTurn() {
+func (p *endpointPool) getTurn() {
 	p.queue <- struct{}{}
 }
 
-func (p *EndpointPool) waitTurn(c context.Context) error {
+func (p *endpointPool) waitTurn(c context.Context) error {
 	select {
 	case <-c.Done():
 		return c.Err()
@@ -467,11 +603,11 @@ func (p *EndpointPool) waitTurn(c context.Context) error {
 	}
 }
 
-func (p *EndpointPool) freeTurn() {
+func (p *endpointPool) freeTurn() {
 	<-p.queue
 }
 
-func (p *EndpointPool) popIdle(sig esig.ESIG) *Endpoint {
+func (p *endpointPool) popIdle(sig esig.ESIG) *Endpoint {
 	if len(p.idleConns) == 0 {
 		return nil
 	}
@@ -487,37 +623,13 @@ func (p *EndpointPool) popIdle(sig esig.ESIG) *Endpoint {
 	return endpoint
 }
 
-func (p *EndpointPool) Put(ctx context.Context, cn *Endpoint) {
-	if !cn.pooled {
-		p.Remove(ctx, cn, nil)
-		return
-	}
-
-	p.connsMu.Lock()
-	p.idleConns = append(p.idleConns, cn.conn)
-	p.idleConnsLen++
-	p.connsMu.Unlock()
-	p.freeTurn()
-}
-
-func (p *EndpointPool) Remove(ctx context.Context, cn *Endpoint, reason error) {
-	p.removeConnWithLock(cn.conn)
-	p.freeTurn()
-	_ = p.closeConn(cn.conn)
-}
-
-func (p *EndpointPool) CloseConn(cn *Conn) error {
-	p.removeConnWithLock(cn)
-	return p.closeConn(cn)
-}
-
-func (p *EndpointPool) removeConnWithLock(cn *Conn) {
+func (p *endpointPool) removeConnWithLock(cn *Conn) {
 	p.connsMu.Lock()
 	p.removeConn(cn)
 	p.connsMu.Unlock()
 }
 
-func (p *EndpointPool) removeConn(cn *Conn) {
+func (p *endpointPool) removeConn(cn *Conn) {
 	for i, c := range p.conns {
 		if c == cn {
 			p.conns = append(p.conns[:i], p.conns[i+1:]...)
@@ -530,55 +642,18 @@ func (p *EndpointPool) removeConn(cn *Conn) {
 	}
 }
 
-func (p *EndpointPool) closeConn(cn *Conn) error {
+func (p *endpointPool) closeConn(cn *Conn) error {
 	if p.opt.OnClose != nil {
 		_ = p.opt.OnClose(cn)
 	}
 	return cn.Close()
 }
 
-// Len returns total number of connections.
-func (p *EndpointPool) Len() int {
-	p.connsMu.Lock()
-	n := len(p.conns)
-	p.connsMu.Unlock()
-	return n
-}
-
-// IdleLen returns number of idle connections.
-func (p *EndpointPool) IdleLen() int {
-	p.connsMu.Lock()
-	n := p.idleConnsLen
-	p.connsMu.Unlock()
-	return n
-}
-
-func (p *EndpointPool) closed() bool {
+func (p *endpointPool) closed() bool {
 	return atomic.LoadUint32(&p._closed) == 1
 }
 
-func (p *EndpointPool) Close() error {
-	if !atomic.CompareAndSwapUint32(&p._closed, 0, 1) {
-		return ErrClosed
-	}
-
-	var firstErr error
-	p.connsMu.Lock()
-	for _, cn := range p.conns {
-		if err := p.closeConn(cn); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	p.conns = nil
-	p.poolSize = 0
-	p.idleConns = nil
-	p.idleConnsLen = 0
-	p.connsMu.Unlock()
-
-	return firstErr
-}
-
-func (p *EndpointPool) reaper(frequency time.Duration) {
+func (p *endpointPool) reaper(frequency time.Duration) {
 	ticker := time.NewTicker(frequency)
 	defer ticker.Stop()
 
@@ -593,28 +668,7 @@ func (p *EndpointPool) reaper(frequency time.Duration) {
 	}
 }
 
-func (p *EndpointPool) ReapStaleConns() (int, error) {
-	var n int
-	for {
-		p.getTurn()
-
-		p.connsMu.Lock()
-		cn := p.reapStaleConn()
-		p.connsMu.Unlock()
-
-		p.freeTurn()
-
-		if cn != nil {
-			_ = p.closeConn(cn)
-			n++
-		} else {
-			break
-		}
-	}
-	return n, nil
-}
-
-func (p *EndpointPool) reapStaleConn() *Conn {
+func (p *endpointPool) reapStaleConn() *Conn {
 	if len(p.idleConns) == 0 {
 		return nil
 	}
@@ -631,7 +685,7 @@ func (p *EndpointPool) reapStaleConn() *Conn {
 	return cn
 }
 
-func (p *EndpointPool) isStaleConn(cn *Conn) bool {
+func (p *endpointPool) isStaleConn(cn *Conn) bool {
 	if p.opt.IdleTimeout == 0 && p.opt.MaxConnAge == 0 {
 		return false
 	}

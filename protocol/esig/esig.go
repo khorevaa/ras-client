@@ -13,11 +13,6 @@ func (e ESIG) High() uuid.UUID {
 	return uuid.FromBytesOrNil(e[:16])
 }
 
-func (e ESIG) HaveHigh(high uuid.UUID) bool {
-
-	return uuid.FromBytesOrNil(e[:16])
-}
-
 func (e ESIG) Low() uuid.UUID {
 
 	return uuid.FromBytesOrNil(e[17:32])
@@ -29,8 +24,28 @@ func Equal(u1 ESIG, u2 ESIG) bool {
 }
 
 // Equal returns true if u1 and u2 equals, otherwise returns false.
-func HighEqual(u1 ESIG, u2 ESIG) bool {
-	return bytes.Equal(u1[:16], u2[:16])
+func HighBoundEqual(u1 ESIG, uuid uuid.UUID) bool {
+	return bytes.Equal(u1[:16], uuid[:])
+}
+
+// Equal returns true if u1 and u2 equals, otherwise returns false.
+func LowBoundEqual(u1 ESIG, uuid uuid.UUID) bool {
+	return bytes.Equal(u1[17:], uuid[:])
+}
+
+// Equal returns true if u1 and u2 equals, otherwise returns false.
+func LowBoundNil(u1 ESIG) bool {
+	return bytes.Equal(u1[17:], uuid.Nil[:])
+}
+
+// Equal returns true if u1 and u2 equals, otherwise returns false.
+func HighBoundNil(u1 ESIG) bool {
+	return bytes.Equal(u1[:16], uuid.Nil[:])
+}
+
+// Equal returns true if u1 and u2 equals, otherwise returns false.
+func EqualBounds(u1 ESIG, u2 ESIG) (bool, bool) {
+	return bytes.Equal(u1[:16], u2[:16]), bytes.Equal(u1[17:], u2[17:])
 }
 
 var Nil = ESIG{}

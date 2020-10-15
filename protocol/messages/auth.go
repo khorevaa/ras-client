@@ -49,6 +49,10 @@ type AuthenticateAgentRequest struct {
 	User, Password string
 }
 
+func (_ AuthenticateAgentRequest) Sig() esig.ESIG {
+	return esig.Nil
+}
+
 func (_ AuthenticateAgentRequest) ResponseMessage() types.EndpointResponseMessage {
 	return nullEndpointResponse()
 }
