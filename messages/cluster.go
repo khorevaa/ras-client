@@ -1,11 +1,10 @@
 package messages
 
 import (
+	"github.com/khorevaa/ras-client/protocol/codec"
+	"github.com/khorevaa/ras-client/serialize"
+	"github.com/khorevaa/ras-client/serialize/esig"
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/protocol/codec"
-	"github.com/v8platform/rac/serialize"
-	"github.com/v8platform/rac/serialize/esig"
-	"github.com/v8platform/rac/types"
 	"io"
 )
 
@@ -14,9 +13,7 @@ import (
 //  type GET_CLUSTERS_REQUEST = 11
 //  kind MESSAGE_KIND = 1
 //  respond GetClustersResponse
-type GetClustersRequest struct {
-	response *GetClustersResponse
-}
+type GetClustersRequest struct{}
 
 func (_ *GetClustersRequest) Sig() esig.ESIG {
 	return esig.Nil
@@ -24,24 +21,7 @@ func (_ *GetClustersRequest) Sig() esig.ESIG {
 
 func (_ *GetClustersRequest) Format(_ codec.Encoder, _ int, _ io.Writer) {}
 
-func (_ *GetClustersRequest) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (r *GetClustersRequest) ResponseMessage() types.EndpointResponseMessage {
-
-	if r.response == nil {
-		r.response = &GetClustersResponse{}
-	}
-
-	return r.response
-}
-
-func (r *GetClustersRequest) Response() *GetClustersResponse {
-	return r.response
-}
-
-func (_ GetClustersRequest) Type() types.Typed {
+func (_ GetClustersRequest) Type() EndpointMessageType {
 	return GET_CLUSTERS_REQUEST
 }
 
@@ -67,11 +47,7 @@ func (res *GetClustersResponse) Parse(decoder codec.Decoder, version int, r io.R
 
 }
 
-func (_ *GetClustersResponse) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (_ *GetClustersResponse) Type() types.Typed {
+func (_ *GetClustersResponse) Type() EndpointMessageType {
 	return GET_CLUSTERS_RESPONSE
 }
 
@@ -89,24 +65,7 @@ func (r *GetClusterInfoRequest) Format(encoder codec.Encoder, _ int, w io.Writer
 	encoder.Uuid(r.ID, w)
 }
 
-func (_ *GetClusterInfoRequest) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (r *GetClusterInfoRequest) ResponseMessage() types.EndpointResponseMessage {
-
-	if r.response == nil {
-		r.response = &GetClusterInfoResponse{}
-	}
-
-	return r.response
-}
-
-func (r *GetClusterInfoRequest) Response() *GetClusterInfoResponse {
-	return r.response
-}
-
-func (_ GetClusterInfoRequest) Type() types.Typed {
+func (_ *GetClusterInfoRequest) Type() EndpointMessageType {
 	return GET_CLUSTER_INFO_REQUEST
 }
 
@@ -126,10 +85,6 @@ func (res *GetClusterInfoResponse) Parse(decoder codec.Decoder, version int, r i
 	res.Info = info
 }
 
-func (_ *GetClusterInfoResponse) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (_ *GetClusterInfoResponse) Type() types.Typed {
+func (_ *GetClusterInfoResponse) Type() EndpointMessageType {
 	return GET_CLUSTER_INFO_RESPONSE
 }

@@ -3,11 +3,9 @@ package pool
 import (
 	"context"
 	"errors"
+	"github.com/khorevaa/ras-client/messages"
+	"github.com/khorevaa/ras-client/serialize/esig"
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/messages"
-	"github.com/v8platform/rac/serialize/esig"
-	"github.com/v8platform/rac/types"
-
 	"sync"
 	"sync/atomic"
 	"time"
@@ -190,13 +188,13 @@ func (p *endpointPool) NewEndpoint(ctx context.Context) (*Endpoint, error) {
 		return endpoint, nil
 	}
 
-	newcn, err := p.newConn(ctx, true)
+	newConn, err := p.newConn(ctx, true)
 	if err != nil {
 		p.freeTurn()
 		return nil, err
 	}
 
-	endpoint, err := p.openEndpoint(ctx, newcn)
+	endpoint, err := p.openEndpoint(ctx, newConn)
 
 	return endpoint, err
 
@@ -253,19 +251,19 @@ func (p *endpointPool) Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error
 		return endpoint, nil
 	}
 
-	newcn, err := p.newConn(ctx, true)
+	newConn, err := p.newConn(ctx, true)
 	if err != nil {
 		p.freeTurn()
 
 		return nil, err
 	}
 
-	endpoint, err := p.openEndpoint(ctx, newcn)
+	endpoint, err := p.openEndpoint(ctx, newConn)
 
 	return endpoint, err
 }
 
-func (p *endpointPool) Remove(ctx context.Context, cn *Endpoint, reason error) {
+func (p *endpointPool) Remove(_ context.Context, cn *Endpoint, _ error) {
 	p.removeConnWithLock(cn.conn)
 	p.freeTurn()
 	_ = p.closeConn(cn.conn)
@@ -335,7 +333,7 @@ func (p *endpointPool) Close() error {
 	return firstErr
 }
 
-func (p *endpointPool) CloseEndpoint(endpoint *Endpoint) error {
+func (p *endpointPool) CloseEndpoint(*Endpoint) error {
 	panic("implement me")
 }
 
@@ -389,7 +387,7 @@ func (p *endpointPool) openEndpoint(ctx context.Context, conn *Conn) (*Endpoint,
 }
 
 // Get returns existed connection from the pool or creates a new one.
-func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req types.EndpointRequestMessage) error {
+func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req messages.EndpointRequestMessage) error {
 
 	sig := req.Sig()
 
@@ -634,7 +632,7 @@ func (p *endpointPool) popIdle(sig esig.ESIG) *Endpoint {
 		return nil
 	}
 
-	endpoint := p.idleConns.Pop(sig)
+	endpoint := p.idleConns.Pop(sig, p.opt.MaxOpenEndpoints)
 
 	if endpoint == nil {
 		return nil

@@ -3,7 +3,6 @@ package codec
 import (
 	"encoding/binary"
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/serialize"
 	"github.com/xelaj/go-dry"
 	"io"
 	"math"
@@ -51,8 +50,8 @@ func (e *encoder) Value(val interface{}, w io.Writer) {
 		e.String(typed, w)
 	case byte:
 		e.Byte(typed, w)
-	case Typed:
-		e.Type(typed, w)
+	case time.Time:
+		e.Time(typed, w)
 	default:
 		dry.PanicIf(true, "errow encode typed value")
 	}
@@ -176,7 +175,7 @@ func (e *encoder) TypedValue(val interface{}, w io.Writer) {
 	}
 
 	valueType := detectType(val)
-	e.Type(valueType, w)
+	e.Type(byte(valueType), w)
 
 	switch valueType {
 
@@ -249,12 +248,12 @@ func (e *encoder) NullableSize(val int, w io.Writer) {
 	}
 }
 
-func (e *encoder) Type(val serialize.Typed, w io.Writer) {
-	if val.Type() == NULL_BYTE {
+func (e *encoder) Type(val byte, w io.Writer) {
+	if val == NULL_BYTE {
 		e.Null(w)
 		return
 	}
-	e.Byte(byte(val.Type()), w)
+	e.Byte(val, w)
 }
 
 func (e *encoder) Bytes(val []byte, w io.Writer) {

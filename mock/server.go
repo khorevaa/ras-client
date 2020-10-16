@@ -17,6 +17,7 @@ type Server interface {
 
 // NewServer creates a new Server using given protocol
 // and addr.
+//goland:noinspection GoUnusedExportedFunction
 func NewServer(protocol, addr string) (Server, error) {
 	switch strings.ToLower(protocol) {
 	case "tcp":
@@ -24,7 +25,7 @@ func NewServer(protocol, addr string) (Server, error) {
 			addr: addr,
 		}, nil
 	}
-	return nil, errors.New("Invalid protocol given")
+	return nil, errors.New("invalid protocol given")
 }
 
 // TCPServer holds the structure of our TCP

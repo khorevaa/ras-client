@@ -180,8 +180,8 @@ func (i *ConnectionShortInfo) Parse(decoder Decoder, _ int, r io.Reader) {
 
 }
 
-func (info ConnectionShortInfo) Sig() (cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) {
-	return info.ClusterID, info.Process, info.UUID
+func (i ConnectionShortInfo) Sig() (cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) {
+	return i.ClusterID, i.Process, i.UUID
 }
 
 type ConnectionInfoList []*ConnectionInfo
@@ -250,6 +250,6 @@ func (i *ConnectionInfo) Parse(decoder Decoder, _ int, r io.Reader) {
 
 }
 
-func (info ConnectionInfo) Sig() (cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) {
-	return info.ClusterID, info.Process, info.UUID
+func (i ConnectionInfo) Sig() (cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) {
+	return i.ClusterID, i.Process, i.UUID
 }

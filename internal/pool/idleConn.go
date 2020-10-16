@@ -1,16 +1,14 @@
 package pool
 
 import (
+	"github.com/khorevaa/ras-client/serialize/esig"
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/serialize/esig"
 	"sort"
 )
 
-const maxOpenEndpoints = 50
-
 type IdleConns []*Conn
 
-func (c *IdleConns) Pop(sig esig.ESIG) *Endpoint {
+func (c *IdleConns) Pop(sig esig.ESIG, maxOpenEndpoints int) *Endpoint {
 
 	type finder struct {
 		connIdx     int

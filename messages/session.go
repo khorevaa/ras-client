@@ -1,12 +1,14 @@
 package messages
 
 import (
+	"github.com/khorevaa/ras-client/protocol/codec"
+	"github.com/khorevaa/ras-client/serialize"
+	"github.com/khorevaa/ras-client/serialize/esig"
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/protocol/codec"
-	"github.com/v8platform/rac/serialize"
-	"github.com/v8platform/rac/types"
 	"io"
 )
+
+var _ EndpointRequestMessage = (*TerminateSessionRequest)(nil)
 
 // TerminateSessionRequest отключение сеанса
 //
@@ -19,16 +21,12 @@ type TerminateSessionRequest struct {
 	Message   string
 }
 
-func (_ *TerminateSessionRequest) Kind() types.Typed {
-	return MESSAGE_KIND
+func (r *TerminateSessionRequest) Sig() esig.ESIG {
+	return esig.FromUuid(r.ClusterID)
 }
 
-func (_ *TerminateSessionRequest) Type() types.Typed {
+func (_ *TerminateSessionRequest) Type() EndpointMessageType {
 	return TERMINATE_SESSION_REQUEST
-}
-
-func (_ TerminateSessionRequest) ResponseMessage() types.EndpointResponseMessage {
-	return nullEndpointResponse()
 }
 
 func (r *TerminateSessionRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
@@ -36,6 +34,8 @@ func (r *TerminateSessionRequest) Format(encoder codec.Encoder, _ int, w io.Writ
 	encoder.Uuid(r.SessionID, w)
 	encoder.String(r.Message, w)
 }
+
+var _ EndpointRequestMessage = (*GetInfobaseSessionsRequest)(nil)
 
 // GetInfobaseSessionsRequest получение списка сессий информационной базы кластера
 //
@@ -45,25 +45,13 @@ func (r *TerminateSessionRequest) Format(encoder codec.Encoder, _ int, w io.Writ
 type GetInfobaseSessionsRequest struct {
 	ClusterID  uuid.UUID
 	InfobaseID uuid.UUID
-	response   *GetInfobaseSessionsResponse
 }
 
-func (_ *GetInfobaseSessionsRequest) Kind() types.Typed {
-	return MESSAGE_KIND
+func (r *GetInfobaseSessionsRequest) Sig() esig.ESIG {
+	return esig.From2Uuid(r.ClusterID, r.InfobaseID)
 }
 
-func (r *GetInfobaseSessionsRequest) ResponseMessage() types.EndpointResponseMessage {
-	if r.response == nil {
-		r.response = &GetInfobaseSessionsResponse{}
-	}
-
-	r.response.ClusterID = r.ClusterID
-	r.response.InfobaseID = r.InfobaseID
-
-	return r.response
-}
-
-func (_ *GetInfobaseSessionsRequest) Type() types.Typed {
+func (_ *GetInfobaseSessionsRequest) Type() EndpointMessageType {
 	return GET_INFOBASE_SESSIONS_REQUEST
 }
 
@@ -72,26 +60,16 @@ func (r *GetInfobaseSessionsRequest) Format(encoder codec.Encoder, _ int, w io.W
 	encoder.Uuid(r.InfobaseID, w)
 }
 
-func (r *GetInfobaseSessionsRequest) Response() *GetInfobaseSessionsResponse {
-	return r.response
-}
-
 // GetInfobaseSessionsResponse ответ со списком сессий кластера
 //
 //  type GET_INFOBASE_SESSIONS_RESPONSE = 62
 //  kind MESSAGE_KIND = 1
 //  respond Sessions serialize.SessionInfoList
 type GetInfobaseSessionsResponse struct {
-	ClusterID  uuid.UUID
-	InfobaseID uuid.UUID
-	Sessions   serialize.SessionInfoList
+	Sessions serialize.SessionInfoList
 }
 
-func (_ *GetInfobaseSessionsResponse) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (_ *GetInfobaseSessionsResponse) Type() types.Typed {
+func (_ *GetInfobaseSessionsResponse) Type() EndpointMessageType {
 	return GET_INFOBASE_SESSIONS_RESPONSE
 }
 
@@ -99,14 +77,12 @@ func (res *GetInfobaseSessionsResponse) Parse(decoder codec.Decoder, version int
 
 	list := serialize.SessionInfoList{}
 	list.Parse(decoder, version, r)
-	list.Each(func(info *serialize.SessionInfo) {
-		info.ClusterID = res.ClusterID
-		info.InfobaseID = res.InfobaseID
-	})
 
 	res.Sessions = list
 
 }
+
+var _ EndpointRequestMessage = (*GetSessionsRequest)(nil)
 
 // GetSessionsRequest получение списка сессий кластера
 //
@@ -118,30 +94,16 @@ type GetSessionsRequest struct {
 	response  *GetSessionsResponse
 }
 
-func (_ *GetSessionsRequest) Kind() types.Typed {
-	return MESSAGE_KIND
+func (r *GetSessionsRequest) Sig() esig.ESIG {
+	return esig.FromUuid(r.ClusterID)
 }
 
-func (r *GetSessionsRequest) ResponseMessage() types.EndpointResponseMessage {
-	if r.response == nil {
-		r.response = &GetSessionsResponse{}
-	}
-
-	r.response.ClusterID = r.ClusterID
-
-	return r.response
-}
-
-func (_ *GetSessionsRequest) Type() types.Typed {
+func (_ *GetSessionsRequest) Type() EndpointMessageType {
 	return GET_SESSIONS_REQUEST
 }
 
 func (r *GetSessionsRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 	encoder.Uuid(r.ClusterID, w)
-}
-
-func (r *GetSessionsRequest) Response() *GetSessionsResponse {
-	return r.response
 }
 
 // GetInfobaseSessionsResponse ответ со списком сессий кластера
@@ -150,15 +112,10 @@ func (r *GetSessionsRequest) Response() *GetSessionsResponse {
 //  kind MESSAGE_KIND = 1
 //  respond Sessions serialize.SessionInfoList
 type GetSessionsResponse struct {
-	ClusterID uuid.UUID
-	Sessions  serialize.SessionInfoList
+	Sessions serialize.SessionInfoList
 }
 
-func (_ *GetSessionsResponse) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (_ *GetSessionsResponse) Type() types.Typed {
+func (_ *GetSessionsResponse) Type() EndpointMessageType {
 	return GET_SESSIONS_RESPONSE
 }
 
@@ -166,9 +123,6 @@ func (res *GetSessionsResponse) Parse(decoder codec.Decoder, version int, r io.R
 
 	list := serialize.SessionInfoList{}
 	list.Parse(decoder, version, r)
-	list.Each(func(info *serialize.SessionInfo) {
-		info.ClusterID = res.ClusterID
-	})
 
 	res.Sessions = list
 

@@ -1,23 +1,6 @@
-package ras_client
+package rclient
 
-import "bytes"
-
-func NewBuffer() *bytes.Buffer {
-	return bytes.NewBuffer([]byte{})
-}
-
-func wrapBuffer(buf ...*bytes.Buffer) *bytes.Buffer {
-
-	header := NewBuffer()
-
-	for _, buffer := range buf {
-		buffer.WriteTo(header)
-	}
-
-	return header
-
-}
-
+//goland:noinspection GoUnusedParameter
 func detectSupportedVersion(err error) string {
 
 	// todo

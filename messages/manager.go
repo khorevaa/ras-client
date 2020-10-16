@@ -1,13 +1,14 @@
 package messages
 
 import (
+	"github.com/khorevaa/ras-client/protocol/codec"
+	"github.com/khorevaa/ras-client/serialize"
+	"github.com/khorevaa/ras-client/serialize/esig"
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/protocol/codec"
-	"github.com/v8platform/rac/serialize"
-	"github.com/v8platform/rac/serialize/esig"
-	"github.com/v8platform/rac/types"
 	"io"
 )
+
+var _ EndpointRequestMessage = (*GetClusterManagersRequest)(nil)
 
 // GetClusterManagersRequest получение списка менеджеров кластера
 //
@@ -16,38 +17,20 @@ import (
 //  respond GetClusterManagersResponse
 type GetClusterManagersRequest struct {
 	ClusterID uuid.UUID
-	response  *GetClusterManagersResponse
 }
 
 func (r *GetClusterManagersRequest) Sig() esig.ESIG {
 	return esig.FromUuid(r.ClusterID)
 }
 
-func (_ *GetClusterManagersRequest) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (r *GetClusterManagersRequest) ResponseMessage() types.EndpointResponseMessage {
-
-	if r.response == nil {
-		r.response = &GetClusterManagersResponse{}
-	}
-
-	return r.response
-}
-
-func (_ *GetClusterManagersRequest) Type() types.Typed {
+func (_ *GetClusterManagersRequest) Type() EndpointMessageType {
 	return GET_CLUSTER_MANAGERS_REQUEST
 }
 
-func (r *GetClusterManagersRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r *GetClusterManagersRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 
 	encoder.Uuid(r.ClusterID, w)
 
-}
-
-func (r *GetClusterManagersRequest) Response() *GetClusterManagersResponse {
-	return r.response
 }
 
 // GetClusterManagersResponse содержит список менеджеров кластера
@@ -70,10 +53,6 @@ func (res *GetClusterManagersResponse) Parse(decoder codec.Decoder, version int,
 	}
 }
 
-func (_ *GetClusterManagersResponse) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (_ *GetClusterManagersResponse) Type() types.Typed {
+func (_ *GetClusterManagersResponse) Type() EndpointMessageType {
 	return GET_CLUSTER_MANAGERS_RESPONSE
 }

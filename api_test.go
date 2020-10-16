@@ -1,11 +1,11 @@
-package ras_client
+package rclient
 
 import (
 	"context"
 	"github.com/k0kubun/pp"
+	"github.com/khorevaa/ras-client/serialize"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/v8platform/rac/serialize"
 	"sync"
 	"testing"
 	"time"

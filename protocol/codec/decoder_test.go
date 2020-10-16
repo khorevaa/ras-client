@@ -4,7 +4,7 @@ package codec
 //import (
 //	"encoding/hex"
 //	"github.com/k0kubun/pp"
-//	"github.com/v8platform/rac/protocol"
+//	"github.com/khorevaa/ras-client/protocol"
 //	"io/ioutil"
 //
 //	"testing"

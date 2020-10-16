@@ -2,13 +2,13 @@ package codec
 
 import (
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/serialize"
 	"io"
 	"time"
 )
 
 const Version = "1.0"
 
+//goland:noinspection ALL
 const (
 	UTF8_CHARSET   = "UTF-8"
 	SIZEOF_SHORT   = 2
@@ -30,6 +30,7 @@ const (
 
 var _ Codec = (*codec1_0)(nil)
 
+//goland:noinspection ALL
 func NewCodec1_0() Codec {
 
 	codec := &codec1_0{}
@@ -39,6 +40,7 @@ func NewCodec1_0() Codec {
 	return codec
 }
 
+//goland:noinspection ALL
 type codec1_0 struct {
 	e Encoder
 	d Decoder
@@ -54,10 +56,6 @@ func (c *codec1_0) Decoder() Decoder {
 
 func (c *codec1_0) Version() int16 {
 	return 256 // Версия кодека у 1С
-}
-
-type Typed interface {
-	Type() int
 }
 
 type Codec interface {
@@ -110,7 +108,7 @@ type Encoder interface {
 	Uuid(val uuid.UUID, w io.Writer)
 	Size(val int, w io.Writer)
 	NullableSize(val int, w io.Writer)
-	Type(val serialize.Typed, w io.Writer)
+	Type(val byte, w io.Writer)
 	EndpointId(val int, w io.Writer)
 	Time(val time.Time, w io.Writer)
 	// Bytes is alias ByteArray
@@ -179,7 +177,7 @@ type Decoder interface {
 
 	Size(r io.Reader) int
 	NullableSize(r io.Reader) int
-	Type(r io.Reader) int
+	Type(r io.Reader) byte
 	// Bytes is alias ByteArray
 	Bytes(val []byte, r io.Reader)
 

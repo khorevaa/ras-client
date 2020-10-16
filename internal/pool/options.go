@@ -19,4 +19,5 @@ type Options struct {
 	PoolTimeout        time.Duration
 	IdleTimeout        time.Duration
 	IdleCheckFrequency time.Duration
+	MaxOpenEndpoints   int
 }

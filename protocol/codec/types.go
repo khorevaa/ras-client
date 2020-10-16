@@ -1,7 +1,8 @@
 package codec
 
-type TypeInterface int
+type TypeInterface byte
 
+//goland:noinspection ALL
 const (
 	BOOLEAN       TypeInterface = 1
 	BYTE                        = 2
@@ -21,6 +22,6 @@ const (
 func (t TypeInterface) raw() byte {
 	return byte(t)
 }
-func (t TypeInterface) Type() int {
-	return int(t)
+func (t TypeInterface) Type() byte {
+	return byte(t)
 }

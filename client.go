@@ -1,27 +1,22 @@
-package ras_client
+package rclient
 
 import (
 	"bytes"
 	"context"
 	"github.com/k0kubun/pp"
-	"github.com/v8platform/rac/internal/pool"
-	"github.com/v8platform/rac/messages"
-	"github.com/v8platform/rac/protocol/codec"
-	"github.com/v8platform/rac/serialize/esig"
-	"github.com/v8platform/rac/types"
+	"github.com/khorevaa/ras-client/internal/pool"
+	"github.com/khorevaa/ras-client/messages"
+	"github.com/khorevaa/ras-client/protocol/codec"
+	"github.com/khorevaa/ras-client/serialize/esig"
 	"net"
 	"strconv"
 	"time"
 
 	bus "github.com/asaskevich/EventBus"
-	//"github.com/k0kubun/pp"
 	"github.com/pkg/errors"
 )
 
-const readTimeout = time.Second * 15
-const magic = 475223888
 const protocolVersion = 256
-const maxResponseChunkSize = 1460
 
 var serviceVersions = []string{"3.0", "4.0", "5.0", "6.0", "7.0", "8.0", "9.0", "10.0"}
 
@@ -52,7 +47,7 @@ func NewClient(addr string) *Client {
 	m.addr = addr
 	m.codec = codec.NewCodec1_0()
 	m.pool = pool.NewEndpointPool(&pool.Options{
-		Dialer:             m.dialfunc,
+		Dialer:             m.dialFn,
 		OpenEndpoint:       m.openEndpoint,
 		CloseEndpoint:      m.closeEndpoint,
 		InitConnection:     m.initConnection,
@@ -72,7 +67,7 @@ func NewClient(addr string) *Client {
 
 func (c *Client) initConnection(ctx context.Context, conn *pool.Conn) error {
 
-	negotiateMessage := NewNegotiateMessage(protocolVersion, c.codec.Version())
+	negotiateMessage := messages.NewNegotiateMessage(protocolVersion, c.codec.Version())
 
 	err := c.sendRequestMessage(conn, negotiateMessage)
 
@@ -80,7 +75,7 @@ func (c *Client) initConnection(ctx context.Context, conn *pool.Conn) error {
 		return err
 	}
 
-	err = c.sendRequestMessage(conn, &ConnectMessage{params: map[string]interface{}{
+	err = c.sendRequestMessage(conn, &messages.ConnectMessage{Params: map[string]interface{}{
 		"connect.timeout": int64(2000),
 	}})
 
@@ -96,7 +91,7 @@ func (c *Client) initConnection(ctx context.Context, conn *pool.Conn) error {
 		return err
 	}
 
-	if _, ok := answer.(*ConnectMessageAck); !ok {
+	if _, ok := answer.(*messages.ConnectMessageAck); !ok {
 		return errors.New("unknown ack")
 	}
 
@@ -105,7 +100,7 @@ func (c *Client) initConnection(ctx context.Context, conn *pool.Conn) error {
 
 func (c *Client) openEndpoint(ctx context.Context, conn *pool.Conn) (info pool.EndpointInfo, err error) {
 
-	var ack *OpenEndpointMessageAck
+	var ack *messages.OpenEndpointMessageAck
 
 	ack, err = c.tryOpenEndpoint(ctx, conn)
 	if err != nil {
@@ -169,9 +164,9 @@ func (e endpointInfo) Codec() codec.Codec {
 	return e.codec
 }
 
-func (c *Client) tryOpenEndpoint(ctx context.Context, conn *pool.Conn) (*OpenEndpointMessageAck, error) {
+func (c *Client) tryOpenEndpoint(ctx context.Context, conn *pool.Conn) (*messages.OpenEndpointMessageAck, error) {
 
-	err := c.sendRequestMessage(conn, &OpenEndpointMessage{Version: c.serviceVersion})
+	err := c.sendRequestMessage(conn, &messages.OpenEndpointMessage{Version: c.serviceVersion})
 
 	packet, err := conn.GetPacket(ctx)
 
@@ -187,11 +182,11 @@ func (c *Client) tryOpenEndpoint(ctx context.Context, conn *pool.Conn) (*OpenEnd
 
 	switch t := answer.(type) {
 
-	case *EndpointFailure:
+	case *messages.EndpointFailure:
 
 		return nil, t
 
-	case *OpenEndpointMessageAck:
+	case *messages.OpenEndpointMessageAck:
 
 		return t, nil
 
@@ -203,10 +198,10 @@ func (c *Client) tryOpenEndpoint(ctx context.Context, conn *pool.Conn) (*OpenEnd
 
 }
 
-func (c *Client) closeEndpoint(ctx context.Context, conn *pool.Conn, endpoint *pool.Endpoint) error {
+func (c *Client) closeEndpoint(_ context.Context, conn *pool.Conn, endpoint *pool.Endpoint) error {
 
-	pp.Println("close endpoint", endpoint.ID())
-	err := c.sendRequestMessage(conn, &CloseEndpointMessage{EndpointID: endpoint.ID()})
+	_, _ = pp.Println("close endpoint", endpoint.ID())
+	err := c.sendRequestMessage(conn, &messages.CloseEndpointMessage{EndpointID: endpoint.ID()})
 
 	//_, err = conn.GetPacket(ctx)
 
@@ -216,11 +211,11 @@ func (c *Client) closeEndpoint(ctx context.Context, conn *pool.Conn, endpoint *p
 
 	return nil
 }
-func (c *Client) sendRequestMessage(conn *pool.Conn, message types.RequestMessage) error {
+func (c *Client) sendRequestMessage(conn *pool.Conn, message messages.RequestMessage) error {
 
 	body := bytes.NewBuffer([]byte{})
 	message.Format(c.codec.Encoder(), body)
-	packet := pool.NewPacket(byte(message.Type().Type()), body.Bytes())
+	packet := pool.NewPacket(message.Type(), body.Bytes())
 
 	err := conn.SendPacket(packet)
 	if err != nil {
@@ -229,7 +224,7 @@ func (c *Client) sendRequestMessage(conn *pool.Conn, message types.RequestMessag
 	return nil
 }
 
-func (c *Client) tryParseMessage(packet *pool.Packet) (message types.ResponseMessage, err error) {
+func (c *Client) tryParseMessage(packet *pool.Packet) (message messages.ResponseMessage, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			switch val := e.(type) {
@@ -246,32 +241,32 @@ func (c *Client) tryParseMessage(packet *pool.Packet) (message types.ResponseMes
 		}
 	}()
 
-	switch int(packet.Type) {
+	switch packet.Type {
 
-	case types.CONNECT_ACK.Type():
+	case messages.CONNECT_ACK:
 
 		decoder := c.codec.Decoder()
 
-		message = &ConnectMessageAck{}
+		message = &messages.ConnectMessageAck{}
 		message.Parse(decoder, packet)
 
-	case types.KEEP_ALIVE.Type():
+	case messages.KEEP_ALIVE:
 		// nothing
-	case types.ENDPOINT_OPEN_ACK.Type():
+	case messages.ENDPOINT_OPEN_ACK:
 
 		decoder := c.codec.Decoder()
 
-		message = &OpenEndpointMessageAck{}
+		message = &messages.OpenEndpointMessageAck{}
 		message.Parse(decoder, packet)
 
-	case types.ENDPOINT_FAILURE.Type():
+	case messages.ENDPOINT_FAILURE:
 
 		decoder := c.codec.Decoder()
 
-		message = &EndpointFailure{}
+		message = &messages.EndpointFailure{}
 		message.Parse(decoder, packet)
 
-	case types.NULL_TYPE.Type():
+	case messages.NULL_TYPE:
 
 		panic(pp.Sprintln(int(packet.Type), "packet", packet))
 
@@ -283,7 +278,7 @@ func (c *Client) tryParseMessage(packet *pool.Packet) (message types.ResponseMes
 	return
 }
 
-func (c *Client) dialfunc(ctx context.Context) (net.Conn, error) {
+func (c *Client) dialFn(ctx context.Context) (net.Conn, error) {
 
 	_, err := net.ResolveTCPAddr("tcp", c.addr)
 	if err != nil {
@@ -328,7 +323,7 @@ func (c *Client) withEndpoint(ctx context.Context, sig esig.ESIG, fn func(contex
 
 }
 
-func (c *Client) sendEndpointRequest(ctx context.Context, req types.EndpointRequestMessage) (interface{}, error) {
+func (c *Client) sendEndpointRequest(ctx context.Context, req messages.EndpointRequestMessage) (interface{}, error) {
 
 	var value interface{}
 

@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-const maxResponseChunkSize = 1460
-
 // IOError is the data type for errors occurring in case of failure.
 type IOError struct {
 	Connection net.Conn
@@ -45,46 +43,46 @@ func NewConn(netConn net.Conn) *Conn {
 	return cn
 }
 
-func (cn *Conn) SendPacket(packet *Packet) error {
+func (c *Conn) SendPacket(packet *Packet) error {
 
-	cn.SetUsedAt(time.Now())
-	err := packet.Write(cn.netConn)
+	c.SetUsedAt(time.Now())
+	err := packet.Write(c.netConn)
 	return err
 }
 
-func (cn *Conn) GetPacket(ctx context.Context) (packet *Packet, err error) {
+func (c *Conn) GetPacket(ctx context.Context) (packet *Packet, err error) {
 
-	cn.SetUsedAt(time.Now())
-	return cn.readContext(ctx)
+	c.SetUsedAt(time.Now())
+	return c.readContext(ctx)
 }
 
-func (cn *Conn) UsedAt() time.Time {
-	unix := atomic.LoadUint32(&cn.usedAt)
+func (c *Conn) UsedAt() time.Time {
+	unix := atomic.LoadUint32(&c.usedAt)
 	return time.Unix(int64(unix), 0)
 }
 
-func (cn *Conn) SetUsedAt(tm time.Time) {
-	atomic.StoreUint32(&cn.usedAt, uint32(tm.Unix()))
+func (c *Conn) SetUsedAt(tm time.Time) {
+	atomic.StoreUint32(&c.usedAt, uint32(tm.Unix()))
 }
 
-func (cn *Conn) RemoteAddr() net.Addr {
-	return cn.netConn.RemoteAddr()
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.netConn.RemoteAddr()
 }
 
-func (cn *Conn) SetNetConn(netConn net.Conn) {
-	cn.netConn = netConn
+func (c *Conn) SetNetConn(netConn net.Conn) {
+	c.netConn = netConn
 }
 
-func (cn *Conn) Close() error {
+func (c *Conn) Close() error {
 
-	if cn.closer != nil {
+	if c.closer != nil {
 
-		for _, endpoint := range cn.endpoints {
-			_ = cn.closer(context.Background(), cn, endpoint)
+		for _, endpoint := range c.endpoints {
+			_ = c.closer(context.Background(), c, endpoint)
 		}
 	}
 
-	return cn.netConn.Close()
+	return c.netConn.Close()
 }
 
 //func (conn *Conn) lock() {
@@ -100,16 +98,16 @@ func (cn *Conn) Close() error {
 //
 //}
 
-func (conn *Conn) Locked() bool {
-	return atomic.LoadUint32(&conn._locked) == 1
+func (c *Conn) Locked() bool {
+	return atomic.LoadUint32(&c._locked) == 1
 }
 
-func (conn *Conn) readContext(ctx context.Context) (*Packet, error) {
+func (c *Conn) readContext(ctx context.Context) (*Packet, error) {
 
 	recvDone := make(chan *Packet)
 	errChan := make(chan error)
 
-	go conn.readPacket(recvDone, errChan)
+	go c.readPacket(recvDone, errChan)
 
 	// setup the cancellation to abort reads in process
 	for {
@@ -119,7 +117,7 @@ func (conn *Conn) readContext(ctx context.Context) (*Packet, error) {
 			// Close() can be used if this isn't necessarily a TCP connection
 		case err := <-errChan:
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				go conn.readPacket(recvDone, errChan)
+				go c.readPacket(recvDone, errChan)
 				continue
 			}
 			return nil, err
@@ -130,12 +128,12 @@ func (conn *Conn) readContext(ctx context.Context) (*Packet, error) {
 
 }
 
-func (conn *Conn) readPacket(recvDone chan *Packet, errChan chan error) {
+func (c *Conn) readPacket(recvDone chan *Packet, errChan chan error) {
 
-	//conn.lock()
-	//defer conn.unlock()
+	//c.lock()
+	//defer c.unlock()
 
-	err := conn.netConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	err := c.netConn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	if err != nil {
 		errChan <- err
 		return
@@ -143,22 +141,22 @@ func (conn *Conn) readPacket(recvDone chan *Packet, errChan chan error) {
 
 	typeBuffer := make([]byte, 1)
 
-	_, err = conn.netConn.Read(typeBuffer)
+	_, err = c.netConn.Read(typeBuffer)
 
 	if err != nil {
 
-		if conn.onError != nil {
-			conn.onError(IOError{conn.netConn, err})
+		if c.onError != nil {
+			c.onError(IOError{c.netConn, err})
 		}
 		errChan <- err
 		return
 	}
 
-	size, err := decodeSize(conn.netConn)
+	size, err := decodeSize(c.netConn)
 
 	if err != nil {
-		if conn.onError != nil {
-			conn.onError(IOError{conn.netConn, err})
+		if c.onError != nil {
+			c.onError(IOError{c.netConn, err})
 		}
 		errChan <- err
 		return
@@ -169,12 +167,12 @@ func (conn *Conn) readPacket(recvDone chan *Packet, errChan chan error) {
 	n := 0
 
 	for readLength < len(data) {
-		n, err = conn.netConn.Read(data[readLength:])
+		n, err = c.netConn.Read(data[readLength:])
 		readLength += n
 
 		if err != nil {
-			if conn.onError != nil {
-				conn.onError(IOError{conn.netConn, err})
+			if c.onError != nil {
+				c.onError(IOError{c.netConn, err})
 			}
 			errChan <- err
 			return

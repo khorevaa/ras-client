@@ -12,7 +12,7 @@ type ServiceInfo struct {
 	Description string      `rac:"descr"` //descr     : "Сервис журналов регистрации"
 }
 
-func (i *ServiceInfo) Parse(decoder Decoder, version int, r io.Reader) {
+func (i *ServiceInfo) Parse(decoder Decoder, _ int, r io.Reader) {
 
 	decoder.StringPtr(&i.Name, r)
 	decoder.StringPtr(&i.Description, r)

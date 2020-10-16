@@ -1,13 +1,14 @@
 package messages
 
 import (
+	"github.com/khorevaa/ras-client/protocol/codec"
+	"github.com/khorevaa/ras-client/serialize"
+	"github.com/khorevaa/ras-client/serialize/esig"
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/protocol/codec"
-	"github.com/v8platform/rac/serialize"
-	"github.com/v8platform/rac/serialize/esig"
-	"github.com/v8platform/rac/types"
 	"io"
 )
+
+var _ EndpointRequestMessage = (*GetClusterServicesRequest)(nil)
 
 // GetClusterServicesRequest получение списка сервисов кластера
 //
@@ -23,11 +24,11 @@ func (r *GetClusterServicesRequest) Sig() esig.ESIG {
 	return esig.FromUuid(r.ClusterID)
 }
 
-func (r *GetClusterServicesRequest) Format(encoder codec.Encoder, version int, w io.Writer) {
+func (r *GetClusterServicesRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 	encoder.Uuid(r.ClusterID, w)
 }
 
-func (_ *GetClusterServicesRequest) Type() types.Typed {
+func (_ *GetClusterServicesRequest) Type() EndpointMessageType {
 	return GET_CLUSTER_SERVICES_REQUEST
 }
 
@@ -51,10 +52,6 @@ func (res *GetClusterServicesResponse) Parse(decoder codec.Decoder, version int,
 
 }
 
-func (_ *GetClusterServicesResponse) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (_ *GetClusterServicesResponse) Type() types.Typed {
+func (_ *GetClusterServicesResponse) Type() EndpointMessageType {
 	return GET_CLUSTER_SERVICES_RESPONSE
 }

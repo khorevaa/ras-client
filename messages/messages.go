@@ -1,49 +1,38 @@
-package ras_client
+package messages
 
 import (
 	"github.com/k0kubun/pp"
-	"github.com/v8platform/rac/protocol/codec"
-	"github.com/v8platform/rac/types"
+	"github.com/khorevaa/ras-client/protocol/codec"
 	"io"
 )
+
+const magic = 475223888
 
 type ConnectMessageAck struct {
 	data []byte
 }
 
-func (r *ConnectMessageAck) Type() types.Typed {
+func (r *ConnectMessageAck) Type() byte {
 	return CONNECT_ACK
 }
 
-func (r *ConnectMessageAck) Parse(codec codec.Decoder, w io.Reader) {
-
-}
+func (r *ConnectMessageAck) Parse(codec.Decoder, io.Reader) {}
 
 type ConnectMessage struct {
-	params   map[string]interface{}
-	response *ConnectMessageAck
-}
-
-func (m *ConnectMessage) ResponseMessage() types.ResponseMessage {
-
-	if m.response == nil {
-		m.response = &ConnectMessageAck{}
-	}
-
-	return m.response
+	Params map[string]interface{}
 }
 
 func (m *ConnectMessage) String() string {
 	return ""
 }
 
-func (m *ConnectMessage) Type() types.Typed {
+func (m *ConnectMessage) Type() byte {
 	return CONNECT
 }
 
 func (m ConnectMessage) Format(c codec.Encoder, w io.Writer) {
 
-	size := len(m.params)
+	size := len(m.Params)
 	if size == 0 {
 		c.Null(w)
 		return
@@ -51,7 +40,7 @@ func (m ConnectMessage) Format(c codec.Encoder, w io.Writer) {
 
 	c.NullableSize(size, w)
 
-	for key, value := range m.params {
+	for key, value := range m.Params {
 
 		c.String(key, w)
 		c.TypedValue(value, w)
@@ -66,11 +55,7 @@ type NegotiateMessage struct {
 	CodecVersion    int16
 }
 
-func (n NegotiateMessage) ResponseMessage() types.ResponseMessage {
-	return nil
-}
-
-func (n NegotiateMessage) Type() types.Typed {
+func (n NegotiateMessage) Type() byte {
 	return NEGOTIATE
 }
 
@@ -91,29 +76,19 @@ func NewNegotiateMessage(protocol, codec int16) NegotiateMessage {
 }
 
 const endpointPrefix = "v8.service.Admin.Cluster"
-const endpointParamPrefix = "endpoint."
 
 type OpenEndpointMessage struct {
 	Encoding string
 	Version  string
 	params   map[string]interface{}
-	ack      *OpenEndpointMessageAck
 }
 
 func (m *OpenEndpointMessage) String() string {
 	return pp.Sprintln(m)
 }
 
-func (m *OpenEndpointMessage) Type() types.Typed {
+func (m *OpenEndpointMessage) Type() byte {
 	return ENDPOINT_OPEN
-}
-func (m *OpenEndpointMessage) ResponseMessage() types.ResponseMessage {
-
-	if m.ack == nil {
-		m.ack = &OpenEndpointMessageAck{}
-	}
-
-	return m.ack
 }
 
 func (m *OpenEndpointMessage) Format(c codec.Encoder, w io.Writer) {
@@ -152,7 +127,7 @@ func (m *OpenEndpointMessageAck) Parse(c codec.Decoder, r io.Reader) {
 
 	m.EndpointID = c.EndpointId(r)
 
-	// TODO params
+	// TODO Params
 
 }
 
@@ -160,7 +135,7 @@ func (m *OpenEndpointMessageAck) String() string {
 	return pp.Sprintln(m)
 }
 
-func (m *OpenEndpointMessageAck) Type() types.Typed {
+func (m *OpenEndpointMessageAck) Type() byte {
 	return ENDPOINT_OPEN_ACK
 }
 
@@ -176,7 +151,7 @@ type CloseEndpointMessage struct {
 	EndpointID int
 }
 
-func (m *CloseEndpointMessage) Type() types.Typed {
+func (m *CloseEndpointMessage) Type() byte {
 	return ENDPOINT_CLOSE
 }
 
@@ -193,7 +168,7 @@ type causeError struct {
 
 func (e *causeError) Error() string {
 
-	return pp.Sprintf("service: %s err: %s", e.service, e.msg)
+	return pp.Sprintf("service: %s Err: %s", e.service, e.msg)
 
 }
 
@@ -206,12 +181,12 @@ func (m *EndpointFailure) Parse(c codec.Decoder, r io.Reader) {
 
 	classError := c.String(r)
 
-	pp.Printf(classError)
+	_, _ = pp.Printf(classError)
 
 	errMessage := c.String(r)
 	errSize := c.Size(r)
 
-	pp.Printf(errMessage, errSize)
+	_, _ = pp.Printf(errMessage, errSize)
 
 	if errSize > 0 {
 
@@ -232,7 +207,7 @@ func (m *EndpointFailure) String() string {
 	return m.err.Error()
 }
 
-func (m *EndpointFailure) Type() types.Typed {
+func (m *EndpointFailure) Type() byte {
 	return ENDPOINT_FAILURE
 }
 

@@ -1,6 +1,25 @@
 package messages
 
-const NULL_ENDPOINT_RESPONSE EndpointMessageType = -1
+const (
+	NEGOTIATE byte = iota
+	CONNECT
+	CONNECT_ACK
+	START_TLS // Deprecated: Нереализовано в апи
+	DISCONNECT
+	SASL_NEGOTIATE // Deprecated: Нереализовано в апи
+	SASL_AUTH      // Deprecated: Нереализовано в апи
+	SASL_CHALLENGE // Deprecated: Нереализовано в апи
+	SASL_SUCCESS   // Deprecated: Нереализовано в апи
+	SASL_FAILURE   // Deprecated: Нереализовано в апи
+	SASL_ABORT     // Deprecated: Нереализовано в апи
+	ENDPOINT_OPEN
+	ENDPOINT_OPEN_ACK
+	ENDPOINT_CLOSE
+	ENDPOINT_MESSAGE
+	ENDPOINT_FAILURE
+	KEEP_ALIVE
+	NULL_TYPE = 127
+)
 
 const (
 	GET_AGENT_ADMINS_REQUEST EndpointMessageType = iota
@@ -81,6 +100,7 @@ const (
 	GET_SESSION_LOCKS_REQUEST
 	GET_SESSION_LOCKS_RESPONSE
 )
+
 const (
 	APPLY_ASSIGNMENT_RULES_REQUEST EndpointMessageType = 81 + iota
 	REG_ASSIGNMENT_RULE_REQUEST
@@ -140,11 +160,7 @@ const (
 	GET_AGENT_VERSION_RESPONSE
 )
 
-type EndpointMessageType int
-
-func (t EndpointMessageType) Type() int {
-	return int(t)
-}
+type EndpointMessageType byte
 
 func (t EndpointMessageType) Parser() interface{} {
 

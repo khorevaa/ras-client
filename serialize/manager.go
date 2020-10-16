@@ -16,7 +16,7 @@ type ManagerInfo struct {
 
 }
 
-func (i *ManagerInfo) Parse(decoder Decoder, version int, r io.Reader) {
+func (i *ManagerInfo) Parse(decoder Decoder, _ int, r io.Reader) {
 
 	decoder.UuidPtr(&i.UUID, r)
 	decoder.StringPtr(&i.Description, r)

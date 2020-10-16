@@ -44,7 +44,7 @@ type Encoder interface {
 	Uuid(val uuid.UUID, w io.Writer)
 	Size(val int, w io.Writer)
 	NullableSize(val int, w io.Writer)
-	Type(val Typed, w io.Writer)
+	Type(val byte, w io.Writer)
 	EndpointId(val int, w io.Writer)
 	Time(val time.Time, w io.Writer)
 	// Bytes is alias ByteArray
@@ -111,7 +111,7 @@ type Decoder interface {
 
 	Size(r io.Reader) int
 	NullableSize(r io.Reader) int
-	Type(r io.Reader) int
+	Type(r io.Reader) byte
 	// Bytes is alias ByteArray
 	Bytes(val []byte, r io.Reader)
 

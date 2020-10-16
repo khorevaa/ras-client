@@ -203,7 +203,7 @@ func (e *decoder) Double(r io.Reader) float64 {
 	return e.Float64(r)
 }
 
-func (e *decoder) Null(r io.Reader) {
+func (e *decoder) Null(_ io.Reader) {
 	panic("implement me")
 }
 
@@ -222,7 +222,7 @@ func (e *decoder) String(r io.Reader) string {
 	return string(buf)
 }
 
-func (e *decoder) TypedValue(ptr interface{}, r io.Reader) {
+func (e *decoder) TypedValue(_ interface{}, _ io.Reader) {
 	panic("implement me")
 }
 
@@ -291,21 +291,9 @@ func (e *decoder) NullableSize(r io.Reader) int {
 	return size
 }
 
-const NULL_TYPE = 127
-
-func (e *decoder) Type(r io.Reader) int {
-	//ff := 0xFFFFFF80
+func (e *decoder) Type(r io.Reader) byte {
 	b1 := e.readByte("Type", r)
-
-	cur := int(b1 & 0xFF)
-
-	//if cur&ff != 0x0 {
-	//
-	//	if cur&0x7F != 0x0 {
-	//		panic("decoder: Type -> null type expected")
-	//	}
-	//	return NULL_TYPE
-	//}
+	cur := b1 & 0xFF
 
 	return cur
 }
@@ -359,10 +347,10 @@ func (e *decoder) panicOnError(fnName string, p []byte, n int, err error) {
 
 	if err != nil && e.PanicOnError {
 		panic(&DecoderError{
-			fn:          fnName,
-			needBytes:   p,
-			readedBytes: n,
-			err:         err,
+			fn:        fnName,
+			needBytes: p,
+			readBytes: n,
+			err:       err,
 		})
 	}
 }

@@ -5,10 +5,10 @@ import (
 )
 
 type DecoderError struct {
-	fn          string
-	err         error
-	needBytes   []byte
-	readedBytes int
+	fn        string
+	err       error
+	needBytes []byte
+	readBytes int
 }
 
 func (e *DecoderError) Error() string {

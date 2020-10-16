@@ -1,10 +1,9 @@
 package messages
 
 import (
+	"github.com/khorevaa/ras-client/protocol/codec"
+	"github.com/khorevaa/ras-client/serialize/esig"
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/protocol/codec"
-	"github.com/v8platform/rac/serialize/esig"
-	"github.com/v8platform/rac/types"
 	"io"
 )
 
@@ -28,15 +27,7 @@ func (r ClusterAuthenticateRequest) Format(encoder codec.Encoder, _ int, w io.Wr
 	encoder.String(r.Password, w)
 }
 
-func (_ ClusterAuthenticateRequest) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (_ ClusterAuthenticateRequest) ResponseMessage() types.EndpointResponseMessage {
-	return nullEndpointResponse()
-}
-
-func (_ ClusterAuthenticateRequest) Type() types.Typed {
+func (_ ClusterAuthenticateRequest) Type() EndpointMessageType {
 	return AUTHENTICATE_REQUEST
 }
 
@@ -53,11 +44,7 @@ func (_ AuthenticateAgentRequest) Sig() esig.ESIG {
 	return esig.Nil
 }
 
-func (_ AuthenticateAgentRequest) ResponseMessage() types.EndpointResponseMessage {
-	return nullEndpointResponse()
-}
-
-func (_ AuthenticateAgentRequest) Type() types.Typed {
+func (_ AuthenticateAgentRequest) Type() EndpointMessageType {
 	return AUTHENTICATE_AGENT_REQUEST
 }
 
@@ -82,15 +69,7 @@ func (r AuthenticateInfobaseRequest) Sig() esig.ESIG {
 	return esig.FromUuid(r.ClusterID)
 }
 
-func (_ AuthenticateInfobaseRequest) Kind() types.Typed {
-	return MESSAGE_KIND
-}
-
-func (_ AuthenticateInfobaseRequest) ResponseMessage() types.EndpointResponseMessage {
-	return nullEndpointResponse()
-}
-
-func (_ AuthenticateInfobaseRequest) Type() types.Typed {
+func (_ AuthenticateInfobaseRequest) Type() EndpointMessageType {
 	return ADD_AUTHENTICATION_REQUEST
 }
 

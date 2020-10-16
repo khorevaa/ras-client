@@ -1,10 +1,11 @@
-package ras_client
+package rclient
 
 import (
 	"context"
+
+	"github.com/khorevaa/ras-client/messages"
+	"github.com/khorevaa/ras-client/serialize"
 	uuid "github.com/satori/go.uuid"
-	"github.com/v8platform/rac/messages"
-	"github.com/v8platform/rac/serialize"
 )
 
 //var _ types.Endpoint = (*endpoint)(nil)
@@ -24,7 +25,7 @@ func (c *Client) GetClusters(ctx context.Context) ([]*serialize.ClusterInfo, err
 	return response.Clusters, err
 }
 
-func (e *Client) AuthenticateAgent(user, password string) {
+func (c *Client) AuthenticateAgent(user, password string) {
 
 	panic("TODO Надо понять когда это авторизация должна запускаться")
 	//_, err := e.sendEndpointRequest(&messages.AuthenticateAgentRequest{
@@ -73,9 +74,6 @@ func (c *Client) GetClusterServices(ctx context.Context, id uuid.UUID) ([]*seria
 	}
 
 	response := resp.(*messages.GetClusterServicesResponse)
-	//response.Infobases.Each(func(info *serialize.InfobaseSummaryInfo) {
-	//	info.Cluster = id
-	//})
 
 	return response.Services, err
 }
@@ -100,7 +98,7 @@ func (c *Client) GetClusterInfobases(ctx context.Context, id uuid.UUID) (seriali
 
 //func (e *endpoint) GetClusterConnections(id uuid.UUID) (serialize.ConnectionShortInfoList, error) {
 //
-//	req := messages.GetConnectionsShortRequest{ID: id}
+//	req := messages.GetConnectionsShortRequest{ClusterID: id}
 //	_, err := e.SendMessage(&req)
 //
 //	response := req.Response()
@@ -130,7 +128,7 @@ func (c *Client) GetClusterInfobases(ctx context.Context, id uuid.UUID) (seriali
 //
 //func (e *endpoint) GetClusterInfo(cluster uuid.UUID) (serialize.ClusterInfo, error) {
 //
-//	req := &messages.GetClusterInfoRequest{ID: cluster}
+//	req := &messages.GetClusterInfoRequest{ClusterID: cluster}
 //	_, err := e.SendMessage(req)
 //	response := req.Response()
 //	return response.Info, err
