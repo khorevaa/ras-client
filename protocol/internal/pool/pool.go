@@ -142,12 +142,12 @@ type endpointPool struct {
 
 	queue chan struct{}
 
+	poolSize     int
+	idleConnsLen int
+
 	connsMu   sync.Mutex
 	conns     []*Conn
 	idleConns IdleConns
-
-	poolSize     int
-	idleConnsLen int
 
 	authClusterIdx  map[uuid.UUID]struct{ user, password string }
 	authInfobaseIdx map[uuid.UUID]struct{ user, password string }
@@ -203,7 +203,7 @@ func (p *endpointPool) NewEndpoint(ctx context.Context) (*Endpoint, error) {
 }
 
 func (p *endpointPool) Put(ctx context.Context, cn *Endpoint) {
-	if !cn.pooled {
+	if !cn.conn.pooled {
 		p.Remove(ctx, cn, nil)
 		return
 	}
@@ -237,6 +237,7 @@ func (p *endpointPool) Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error
 
 		if p.isStaleConn(endpoint.conn) {
 			_ = p.CloseConn(endpoint.conn)
+
 			continue
 		}
 
@@ -255,6 +256,7 @@ func (p *endpointPool) Get(ctx context.Context, sig esig.ESIG) (*Endpoint, error
 	newcn, err := p.newConn(ctx, true)
 	if err != nil {
 		p.freeTurn()
+
 		return nil, err
 	}
 
@@ -369,6 +371,7 @@ func (p *endpointPool) openEndpoint(ctx context.Context, conn *Conn) (*Endpoint,
 		if err != nil {
 			return nil, err
 		}
+		conn.Inited = true
 	}
 
 	openAck, err := p.opt.OpenEndpoint(ctx, conn)
@@ -379,6 +382,7 @@ func (p *endpointPool) openEndpoint(ctx context.Context, conn *Conn) (*Endpoint,
 	endpoint := NewEndpoint(openAck)
 	endpoint.Inited = true
 	endpoint.onRequest = p.onRequest
+	endpoint.conn = conn
 	conn.endpoints = append(conn.endpoints, endpoint)
 
 	return endpoint, nil
@@ -409,10 +413,18 @@ func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req ty
 			Password:  password,
 		})
 
-		_, err := endpoint.sendRequest(ctx, authMessage)
+		message, err := endpoint.sendRequest(ctx, authMessage)
 
 		if err != nil {
 			return err
+		}
+
+		switch err := message.Message.(type) {
+
+		case *messages.EndpointMessageFailure:
+
+			return err
+
 		}
 
 		endpoint.sig = esig.FromUuid(clusterID)
@@ -431,10 +443,18 @@ func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req ty
 		Password:  password,
 	})
 
-	_, err := endpoint.sendRequest(ctx, authMessage)
+	message, err := endpoint.sendRequest(ctx, authMessage)
 
 	if err != nil {
 		return err
+	}
+
+	switch err := message.Message.(type) {
+
+	case *messages.EndpointMessageFailure:
+
+		return err
+
 	}
 
 	endpoint.sig = sig
@@ -493,6 +513,8 @@ func (p *endpointPool) newConn(c context.Context, pooled bool) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	cn.closer = p.opt.CloseEndpoint
 
 	p.connsMu.Lock()
 	p.conns = append(p.conns, cn)
@@ -637,6 +659,7 @@ func (p *endpointPool) removeConn(cn *Conn) {
 				p.poolSize--
 				p.checkMinIdleConns()
 			}
+
 			return
 		}
 	}

@@ -145,3 +145,42 @@ type EndpointMessageType int
 func (t EndpointMessageType) Type() int {
 	return int(t)
 }
+
+func (t EndpointMessageType) Parser() interface{} {
+
+	switch t {
+
+	case GET_CLUSTERS_RESPONSE:
+		return &GetClustersResponse{}
+	case GET_CLUSTER_INFO_RESPONSE:
+		return &GetClusterInfoRequest{}
+	case GET_CLUSTER_MANAGERS_RESPONSE:
+		return &GetClusterManagersResponse{}
+	case GET_CLUSTER_SERVICES_REQUEST:
+		return &GetClusterServicesResponse{}
+	case CREATE_INFOBASE_RESPONSE:
+		return &CreateInfobaseResponse{}
+	case GET_INFOBASES_SHORT_RESPONSE:
+		return &GetInfobasesShortResponse{}
+	case GET_INFOBASE_INFO_RESPONSE:
+		return &GetInfobaseInfoResponse{}
+	case GET_CONNECTIONS_SHORT_RESPONSE:
+		return &GetConnectionsShortResponse{}
+	case GET_INFOBASE_CONNECTIONS_SHORT_RESPONSE:
+		return &GetInfobaseConnectionsShortResponse{}
+	case GET_SESSIONS_RESPONSE:
+		return &GetSessionsResponse{}
+	case GET_INFOBASE_SESSIONS_RESPONSE:
+		return &GetInfobaseSessionsResponse{}
+	case GET_LOCKS_RESPONSE:
+		return &GetLocksResponse{}
+	case GET_INFOBASE_LOCKS_RESPONSE:
+		return &GetInfobaseLockResponse{}
+	case GET_CONNECTION_LOCKS_RESPONSE:
+		return &GetConnectionLockResponse{}
+	case GET_SESSION_LOCKS_RESPONSE:
+		return &GetSessionLockResponse{}
+	default:
+		panic("unknown typed parser")
+	}
+}

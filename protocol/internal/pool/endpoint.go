@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/k0kubun/pp"
-	"github.com/v8platform/rac/protocol"
 	"github.com/v8platform/rac/protocol/codec"
 	"github.com/v8platform/rac/protocol/esig"
 	"github.com/v8platform/rac/protocol/messages"
@@ -23,6 +21,7 @@ func NewEndpoint(endpoint EndpointInfo) *Endpoint {
 		version:   endpoint.Version(),
 		format:    endpoint.Format(),
 		serviceID: endpoint.ServiceID(),
+		codec:     endpoint.Codec(),
 	}
 }
 
@@ -69,23 +68,23 @@ func (cn *Endpoint) SetUsedAt(tm time.Time) {
 }
 
 func (e *Endpoint) ID() int {
-	panic("implement me")
+	return e.id
 }
 
 func (e *Endpoint) Version() int {
-	panic("implement me")
+	return e.version
 }
 
-func (e *Endpoint) Format() string {
-	panic("implement me")
+func (e *Endpoint) Format() int16 {
+	return e.format
 }
 
 func (e *Endpoint) ServiceID() string {
-	panic("implement me")
+	return e.serviceID
 }
 
 func (e *Endpoint) Codec() codec.Codec {
-	panic("implement me")
+	return e.codec
 }
 
 type UnknownMessageError struct {
@@ -103,11 +102,13 @@ func (m *UnknownMessageError) Error() string {
 
 func (e *Endpoint) sendRequest(ctx context.Context, message *EndpointMessage) (*EndpointMessage, error) {
 
+	e.SetUsedAt(time.Now())
+
 	body := bytes.NewBuffer([]byte{})
 
 	message.Format(e.codec.Encoder(), e.version, body)
 
-	packet := NewPacket(byte(message.Type.Type()), body.Bytes())
+	packet := NewPacket(byte(types.ENDPOINT_MESSAGE), body.Bytes())
 
 	err := e.conn.SendPacket(packet)
 	if err != nil {
@@ -124,13 +125,13 @@ func (e *Endpoint) sendRequest(ctx context.Context, message *EndpointMessage) (*
 
 }
 
-func (e *Endpoint) sendVoidRequest(ctx context.Context, conn *Conn, m protocol.EndpointMessage) error {
+func (e *Endpoint) sendVoidRequest(ctx context.Context, conn *Conn, m EndpointMessage) error {
 
 	body := bytes.NewBuffer([]byte{})
 
 	m.Format(e.codec.Encoder(), e.version, body)
 
-	packet := NewPacket(byte(m.Type().Type()), body.Bytes())
+	packet := NewPacket(byte(m.Type.Type()), body.Bytes())
 
 	err := conn.SendPacket(packet)
 	if err != nil {
@@ -159,7 +160,7 @@ func (e *Endpoint) tryParseMessage(packet *Packet) (message *EndpointMessage, er
 
 	switch int(packet.Type) {
 
-	case protocol.ENDPOINT_MESSAGE.Type():
+	case types.ENDPOINT_MESSAGE.Type():
 
 		decoder := e.codec.Decoder()
 
@@ -173,9 +174,14 @@ func (e *Endpoint) tryParseMessage(packet *Packet) (message *EndpointMessage, er
 
 		message.Parse(decoder, e.version, packet)
 
-	case protocol.ENDPOINT_FAILURE.Type():
+	case types.ENDPOINT_FAILURE.Type():
 
-		panic(pp.Sprintln(string(packet.Data))) // TODO Гдето есть парсер
+		decoder := e.codec.Decoder()
+
+		err := &messages.EndpointMessageFailure{}
+		err.Parse(decoder, packet)
+
+		return nil, err
 
 	default:
 
@@ -223,23 +229,25 @@ func (m *EndpointMessage) Parse(decoder codec.Decoder, version int, reader io.Re
 		return
 	case messages.EXCEPTION_KIND:
 
-		fail := &protocol.EndpointMessageFailure{EndpointID: m.EndpointID}
+		fail := &messages.EndpointMessageFailure{EndpointID: m.EndpointID}
 		fail.Parse(decoder, reader)
 		m.Message = fail
 
 	case messages.MESSAGE_KIND:
 
 		respondType := decoder.Type(reader)
-		pp.Println(respondType)
 
-		var parser codec.BinaryParser
+		t := messages.EndpointMessageType(respondType)
+
+		respond := t.Parser()
+
+		parser := respond.(codec.BinaryParser)
+
 		// TODO Сделать получение ответа по типу
 		parser.Parse(decoder, version, reader)
 
 		m.Message = parser
 	}
-
-	return
 
 }
 
@@ -247,6 +255,7 @@ func (m *EndpointMessage) Format(encoder codec.Encoder, version int, w io.Writer
 
 	encoder.EndpointId(m.EndpointID, w)
 	encoder.Short(m.EndpointFormat, w)
+
 	encoder.Type(m.Kind, w)
 	encoder.Type(m.Type, w) // МАГИЯ без этого байта требует авторизации на центральном кластере
 
@@ -279,6 +288,18 @@ func (e *Endpoint) SendRequest(ctx context.Context, req types.EndpointRequestMes
 	message := e.newEndpointMessage(req)
 	answer, err := e.sendRequest(ctx, message)
 
+	if err != nil {
+		return nil, err
+	}
+
+	switch err := answer.Message.(type) {
+
+	case *messages.EndpointMessageFailure:
+
+		return nil, err
+
+	}
+
 	return answer, err
 
 }
@@ -288,8 +309,9 @@ func (e *Endpoint) newEndpointMessage(req types.EndpointRequestMessage) *Endpoin
 	message := &EndpointMessage{
 		EndpointID:     e.id,
 		EndpointFormat: e.format,
-		Kind:           messages.EndpointMessageKind(req.Type().Type()),
 		Message:        req,
+		Type:           req.Type(),
+		Kind:           messages.MESSAGE_KIND,
 	}
 
 	return message

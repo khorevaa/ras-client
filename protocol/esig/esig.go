@@ -15,7 +15,7 @@ func (e ESIG) High() uuid.UUID {
 
 func (e ESIG) Low() uuid.UUID {
 
-	return uuid.FromBytesOrNil(e[17:32])
+	return uuid.FromBytesOrNil(e[16:32])
 }
 
 // Equal returns true if u1 and u2 equals, otherwise returns false.
@@ -30,12 +30,12 @@ func HighBoundEqual(u1 ESIG, uuid uuid.UUID) bool {
 
 // Equal returns true if u1 and u2 equals, otherwise returns false.
 func LowBoundEqual(u1 ESIG, uuid uuid.UUID) bool {
-	return bytes.Equal(u1[17:], uuid[:])
+	return bytes.Equal(u1[16:], uuid[:])
 }
 
 // Equal returns true if u1 and u2 equals, otherwise returns false.
 func LowBoundNil(u1 ESIG) bool {
-	return bytes.Equal(u1[17:], uuid.Nil[:])
+	return bytes.Equal(u1[16:], uuid.Nil[:])
 }
 
 // Equal returns true if u1 and u2 equals, otherwise returns false.
@@ -45,7 +45,7 @@ func HighBoundNil(u1 ESIG) bool {
 
 // Equal returns true if u1 and u2 equals, otherwise returns false.
 func EqualBounds(u1 ESIG, u2 ESIG) (bool, bool) {
-	return bytes.Equal(u1[:16], u2[:16]), bytes.Equal(u1[17:], u2[17:])
+	return bytes.Equal(u1[:16], u2[:16]), bytes.Equal(u1[16:], u2[16:])
 }
 
 var Nil = ESIG{}
@@ -66,7 +66,7 @@ func From2Uuid(u1, u2 uuid.UUID) ESIG {
 
 	var sig [32]byte
 	copy(sig[:16], u1.Bytes())
-	copy(sig[17:32], u2.Bytes())
+	copy(sig[16:32], u2.Bytes())
 
 	return sig
 }

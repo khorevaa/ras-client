@@ -1,29 +1,35 @@
 package pool
 
 import (
+	uuid "github.com/satori/go.uuid"
 	"github.com/v8platform/rac/protocol/esig"
 	"sort"
 )
 
+const maxOpenEndpoints = 50
+
 type IdleConns []*Conn
 
-func (c IdleConns) Pop(sig esig.ESIG) *Endpoint {
+func (c *IdleConns) Pop(sig esig.ESIG) *Endpoint {
 
 	type finder struct {
 		connIdx     int
 		endpointIdx int
 		order       int
 		cap         int
+		usedAt      int64
 	}
 
 	var finders []finder
 	var findConnIdx int
 	var findEndpoint *Endpoint
 
-	for idx, conn := range c {
+	conns := *c
+
+	for idx, conn := range conns {
 
 		if len(conn.endpoints) == 0 {
-			finders = append(finders, finder{idx, -1, 0, 0})
+			finders = append(finders, finder{idx, -1, 0, 0, conn.UsedAt().Unix()})
 			continue
 		}
 
@@ -39,11 +45,11 @@ func (c IdleConns) Pop(sig esig.ESIG) *Endpoint {
 
 			orderByte := 2
 
-			if esig.HighEqual(endpoint.sig, sig) {
+			if esig.HighBoundEqual(endpoint.sig, sig.High()) && uuid.Equal(endpoint.sig.Low(), uuid.Nil) {
 				orderByte = 1
 			}
 
-			finders = append(finders, finder{idx, i, orderByte, capEnd})
+			finders = append(finders, finder{idx, i, orderByte, capEnd, endpoint.UsedAt().Unix()})
 
 		}
 
@@ -69,18 +75,39 @@ func (c IdleConns) Pop(sig esig.ESIG) *Endpoint {
 		if finders[i].order > finders[j].order {
 			return false
 		}
-		return finders[i].cap < finders[j].cap
+
+		if finders[i].cap < finders[j].cap {
+			return true
+		}
+		if finders[i].cap > finders[j].cap {
+			return false
+		}
+
+		return finders[i].usedAt < finders[j].usedAt
 	})
 
 	f := finders[0]
 
-	conn := c[f.connIdx]
-	if f.endpointIdx == -1 {
+	conn := conns[f.connIdx]
+
+	switch f.order {
+
+	case 0:
 		findEndpoint = &Endpoint{
 			conn: conn,
 		}
-	} else {
+	case 1:
 		findEndpoint = conn.endpoints[f.endpointIdx]
+	case 2:
+
+		if len(conn.endpoints) < maxOpenEndpoints {
+			findEndpoint = &Endpoint{
+				conn: conn,
+			}
+		} else {
+			findEndpoint = conn.endpoints[f.endpointIdx]
+		}
+
 	}
 
 	c.remove(f.connIdx)

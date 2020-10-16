@@ -46,7 +46,7 @@ func (e *decoder) BoolPtr(ptr *bool, r io.Reader) {
 }
 
 func (e *decoder) Bool(r io.Reader) (bool, bool) {
-	b := e.readByte(r)
+	b := e.readByte("Bool", r)
 
 	switch b {
 
@@ -66,7 +66,7 @@ func (e *decoder) BytePtr(ptr *byte, r io.Reader) {
 }
 
 func (e *decoder) Byte(r io.Reader) byte {
-	b := e.readByte(r)
+	b := e.readByte("Byte", r)
 	return b
 }
 
@@ -101,7 +101,7 @@ func (e *decoder) Uint16Ptr(ptr *uint16, r io.Reader) {
 func (e *decoder) Uint16(r io.Reader) uint16 {
 
 	buf := make([]byte, 2)
-	e.read(r, buf)
+	e.read("Uint16", r, buf)
 
 	val := binary.BigEndian.Uint16(buf)
 	return val
@@ -114,7 +114,7 @@ func (e *decoder) Int16Ptr(ptr *int16, r io.Reader) {
 func (e *decoder) Int16(r io.Reader) int16 {
 
 	buf := make([]byte, 2)
-	e.read(r, buf)
+	e.read("Int16", r, buf)
 	//buf = buf[:n]
 
 	val := int16(binary.BigEndian.Uint16(buf))
@@ -144,7 +144,7 @@ func (e *decoder) Uint32Ptr(ptr *uint32, r io.Reader) {
 func (e *decoder) Uint32(r io.Reader) uint32 {
 
 	buf := make([]byte, 4)
-	e.read(r, buf)
+	e.read("Uint32", r, buf)
 	val := binary.BigEndian.Uint32(buf)
 	return val
 }
@@ -163,7 +163,7 @@ func (e *decoder) Uint64Ptr(ptr *uint64, r io.Reader) {
 
 func (e *decoder) Uint64(r io.Reader) uint64 {
 	buf := make([]byte, 8)
-	e.read(r, buf)
+	e.read("Uint64", r, buf)
 	val := binary.BigEndian.Uint64(buf)
 	return val
 }
@@ -182,6 +182,7 @@ func (e *decoder) Float32Ptr(ptr *float32, r io.Reader) {
 
 func (e *decoder) Float32(r io.Reader) float32 {
 	b := e.Uint32(r)
+
 	return math.Float32frombits(b)
 }
 
@@ -216,7 +217,7 @@ func (e *decoder) String(r io.Reader) string {
 		return ""
 	}
 	buf := make([]byte, size)
-	e.read(r, buf)
+	e.read("String", r, buf)
 
 	return string(buf)
 }
@@ -232,7 +233,7 @@ func (e *decoder) UuidPtr(ptr *uuid.UUID, r io.Reader) {
 func (e *decoder) Uuid(r io.Reader) uuid.UUID {
 
 	buf := make([]byte, 16)
-	e.read(r, buf)
+	e.read("Uuid", r, buf)
 	u, _ := uuid.FromBytes(buf)
 
 	return u
@@ -241,12 +242,12 @@ func (e *decoder) Uuid(r io.Reader) uuid.UUID {
 func (e *decoder) Size(r io.Reader) int {
 
 	ff := 0xFFFFFF80
-	b1 := e.readByte(r)
+	b1 := e.readByte("Size", r)
 	cur := int(b1 & 0xFF)
 	size := cur & 0x7F
 	for shift := MAX_SHIFT; (cur & ff) != 0x0; {
 
-		b1 = e.readByte(r)
+		b1 = e.readByte("Size", r)
 		cur = int(b1 & 0xFF)
 		size += (cur & 0x7F) << shift
 		shift += MAX_SHIFT
@@ -258,7 +259,7 @@ func (e *decoder) Size(r io.Reader) int {
 func (e *decoder) NullableSize(r io.Reader) int {
 	size := 0
 	//ff := 0xFFFFFF80
-	b1 := e.readByte(r)
+	b1 := e.readByte("NullableSize", r)
 	cur := int(b1 & 0xFF)
 	if (cur & 0xFFFFFF80) == 0x0 {
 		size = cur & 0x3F
@@ -267,14 +268,14 @@ func (e *decoder) NullableSize(r io.Reader) int {
 		}
 
 		shift := NULL_SHIFT
-		b1 := e.readByte(r)
+		b1 := e.readByte("NullableSize", r)
 		cur := int(b1 & 0xFF)
 		size += (cur & 0x7F) << NULL_SHIFT
 		shift += MAX_SHIFT
 
 		for (cur & 0xFFFFFF80) != 0x0 {
 
-			b1 := e.readByte(r)
+			b1 := e.readByte("NullableSize", r)
 			cur = int(b1 & 0xFF)
 			size += (cur & 0x7F) << shift
 			shift += MAX_SHIFT
@@ -294,7 +295,7 @@ const NULL_TYPE = 127
 
 func (e *decoder) Type(r io.Reader) int {
 	//ff := 0xFFFFFF80
-	b1 := e.readByte(r)
+	b1 := e.readByte("Type", r)
 
 	cur := int(b1 & 0xFF)
 
@@ -311,7 +312,7 @@ func (e *decoder) Type(r io.Reader) int {
 
 func (e *decoder) Bytes(ptr []byte, r io.Reader) {
 
-	e.read(r, ptr)
+	e.read("Bytes", r, ptr)
 
 }
 
@@ -354,21 +355,26 @@ func (e *decoder) Codec() Codec {
 	return e.codec
 }
 
-func (e *decoder) panicOnError(_ int, err error) {
+func (e *decoder) panicOnError(fnName string, p []byte, n int, err error) {
 
 	if err != nil && e.PanicOnError {
-		panic(err)
+		panic(&DecoderError{
+			fn:          fnName,
+			needBytes:   p,
+			readedBytes: n,
+			err:         err,
+		})
 	}
 }
 
-func (e *decoder) read(r io.Reader, p []byte) {
-	e.panicOnError(r.Read(p))
+func (e *decoder) read(fnName string, r io.Reader, p []byte) {
+	n, err := r.Read(p)
+	e.panicOnError(fnName, p, n, err)
 }
 
-func (e *decoder) readByte(r io.Reader) byte {
+func (e *decoder) readByte(fnName string, r io.Reader) byte {
 
 	buf := make([]byte, 1)
-	e.panicOnError(r.Read(buf))
-
+	e.read(fnName, r, buf)
 	return buf[0]
 }

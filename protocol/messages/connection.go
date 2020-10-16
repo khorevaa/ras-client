@@ -3,6 +3,7 @@ package messages
 import (
 	uuid "github.com/satori/go.uuid"
 	"github.com/v8platform/rac/protocol/codec"
+	"github.com/v8platform/rac/protocol/esig"
 	"github.com/v8platform/rac/protocol/types"
 	"github.com/v8platform/rac/serialize"
 	"io"
@@ -112,6 +113,10 @@ type GetInfobaseConnectionsShortRequest struct {
 	ClusterID  uuid.UUID
 	InfobaseID uuid.UUID
 	response   *GetInfobaseConnectionsShortResponse
+}
+
+func (r *GetInfobaseConnectionsShortRequest) Sig() esig.ESIG {
+	return esig.From2Uuid(r.ClusterID, r.InfobaseID)
 }
 
 func (_ *GetInfobaseConnectionsShortRequest) Kind() types.Typed {

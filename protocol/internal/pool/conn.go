@@ -25,6 +25,7 @@ type Conn struct {
 	onError func(err IOError)
 
 	endpoints []*Endpoint
+	closer    func(ctx context.Context, conn *Conn, endpoint *Endpoint) error
 
 	createdAt time.Time
 	usedAt    uint32 // atomic
@@ -36,6 +37,7 @@ func NewConn(netConn net.Conn) *Conn {
 
 	cn := &Conn{
 		createdAt: time.Now(),
+		connMU:    &sync.Mutex{},
 	}
 	cn.SetNetConn(netConn)
 	cn.SetUsedAt(time.Now())
@@ -45,13 +47,14 @@ func NewConn(netConn net.Conn) *Conn {
 
 func (cn *Conn) SendPacket(packet *Packet) error {
 
-	err := packet.Write(cn.netConn)
 	cn.SetUsedAt(time.Now())
+	err := packet.Write(cn.netConn)
 	return err
 }
 
 func (cn *Conn) GetPacket(ctx context.Context) (packet *Packet, err error) {
 
+	cn.SetUsedAt(time.Now())
 	return cn.readContext(ctx)
 }
 
@@ -73,21 +76,29 @@ func (cn *Conn) SetNetConn(netConn net.Conn) {
 }
 
 func (cn *Conn) Close() error {
+
+	if cn.closer != nil {
+
+		for _, endpoint := range cn.endpoints {
+			_ = cn.closer(context.Background(), cn, endpoint)
+		}
+	}
+
 	return cn.netConn.Close()
 }
 
-func (conn *Conn) lock() {
-
-	conn.connMU.Lock()
-	atomic.StoreUint32(&conn._locked, 1)
-}
-
-func (conn *Conn) unlock() {
-
-	atomic.StoreUint32(&conn._locked, 0)
-	conn.connMU.Unlock()
-
-}
+//func (conn *Conn) lock() {
+//
+//	conn.connMU.Lock()
+//	atomic.StoreUint32(&conn._locked, 1)
+//}
+//
+//func (conn *Conn) unlock() {
+//
+//	atomic.StoreUint32(&conn._locked, 0)
+//	conn.connMU.Unlock()
+//
+//}
 
 func (conn *Conn) Locked() bool {
 	return atomic.LoadUint32(&conn._locked) == 1
@@ -121,12 +132,13 @@ func (conn *Conn) readContext(ctx context.Context) (*Packet, error) {
 
 func (conn *Conn) readPacket(recvDone chan *Packet, errChan chan error) {
 
-	conn.lock()
-	defer conn.unlock()
+	//conn.lock()
+	//defer conn.unlock()
 
 	err := conn.netConn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	if err != nil {
 		errChan <- err
+		return
 	}
 
 	typeBuffer := make([]byte, 1)
@@ -134,15 +146,22 @@ func (conn *Conn) readPacket(recvDone chan *Packet, errChan chan error) {
 	_, err = conn.netConn.Read(typeBuffer)
 
 	if err != nil {
-		conn.onError(IOError{conn.netConn, err})
+
+		if conn.onError != nil {
+			conn.onError(IOError{conn.netConn, err})
+		}
 		errChan <- err
+		return
 	}
 
 	size, err := decodeSize(conn.netConn)
 
 	if err != nil {
-		conn.onError(IOError{conn.netConn, err})
+		if conn.onError != nil {
+			conn.onError(IOError{conn.netConn, err})
+		}
 		errChan <- err
+		return
 	}
 
 	data := make([]byte, size)
@@ -154,8 +173,11 @@ func (conn *Conn) readPacket(recvDone chan *Packet, errChan chan error) {
 		readLength += n
 
 		if err != nil {
-			conn.onError(IOError{conn.netConn, err})
+			if conn.onError != nil {
+				conn.onError(IOError{conn.netConn, err})
+			}
 			errChan <- err
+			return
 		}
 	}
 

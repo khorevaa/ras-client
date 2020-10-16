@@ -68,3 +68,51 @@ type EndpointResponseMessage interface {
 type Typed interface {
 	Type() int
 }
+
+type ConnectionMessageType int
+
+const (
+	NEGOTIATE ConnectionMessageType = iota
+	CONNECT
+	CONNECT_ACK
+	START_TLS // Deprecated: Нереализовано в апи
+	DISCONNECT
+	SASL_NEGOTIATE // Deprecated: Нереализовано в апи
+	SASL_AUTH      // Deprecated: Нереализовано в апи
+	SASL_CHALLENGE // Deprecated: Нереализовано в апи
+	SASL_SUCCESS   // Deprecated: Нереализовано в апи
+	SASL_FAILURE   // Deprecated: Нереализовано в апи
+	SASL_ABORT     // Deprecated: Нереализовано в апи
+	ENDPOINT_OPEN
+	ENDPOINT_OPEN_ACK
+	ENDPOINT_CLOSE
+	ENDPOINT_MESSAGE
+	ENDPOINT_FAILURE
+	KEEP_ALIVE
+
+	NULL_TYPE ConnectionMessageType = 127
+)
+
+func (m ConnectionMessageType) String() string {
+
+	switch m {
+
+	case CONNECT:
+		return "CONNECT"
+	case ENDPOINT_FAILURE:
+		return "ENDPOINT_FAILURE"
+	case ENDPOINT_MESSAGE:
+		return "ENDPOINT_MESSAGE"
+	case CONNECT_ACK:
+		return "CONNECT_ACK"
+	case ENDPOINT_CLOSE:
+		return "ENDPOINT_CLOSE"
+	default:
+		return "неизвестный тим ответа"
+	}
+
+}
+
+func (m ConnectionMessageType) Type() int {
+	return int(m)
+}

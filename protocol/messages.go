@@ -172,6 +172,20 @@ type EndpointFailure struct {
 	err        error
 }
 
+type CloseEndpointMessage struct {
+	EndpointID int
+}
+
+func (m *CloseEndpointMessage) Type() types.Typed {
+	return ENDPOINT_CLOSE
+}
+
+func (m *CloseEndpointMessage) Format(c codec.Encoder, w io.Writer) {
+
+	c.EndpointId(m.EndpointID, w)
+
+}
+
 type causeError struct {
 	service string
 	msg     string
