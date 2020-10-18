@@ -120,7 +120,7 @@ func (s *apiTestSuite) TestGoClustersList() {
 
 	wg.Wait()
 
-	//err := s.client.pool.Close()
+	//err := s.client.base.Close()
 	//s.r().NoError(err)
 
 }

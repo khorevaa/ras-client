@@ -122,6 +122,7 @@ type EndpointPool interface {
 
 	Close() error
 
+	SetAgentAuth(user, password string)
 	SetClusterAuth(id uuid.UUID, user, password string)
 	SetInfobaseAuth(id uuid.UUID, user, password string)
 	GetClusterAuth(id uuid.UUID) (user, password string)
@@ -149,6 +150,7 @@ type endpointPool struct {
 
 	authClusterIdx  map[uuid.UUID]struct{ user, password string }
 	authInfobaseIdx map[uuid.UUID]struct{ user, password string }
+	authAgent       struct{ user, password string }
 }
 
 func (p *endpointPool) NewEndpoint(ctx context.Context) (*Endpoint, error) {
@@ -272,6 +274,12 @@ func (p *endpointPool) Remove(_ context.Context, cn *Endpoint, _ error) {
 func (p *endpointPool) CloseConn(cn *Conn) error {
 	p.removeConnWithLock(cn)
 	return p.closeConn(cn)
+}
+
+func (p *endpointPool) SetAgentAuth(user, password string) {
+
+	p.authAgent = struct{ user, password string }{user: user, password: password}
+
 }
 
 func (p *endpointPool) SetClusterAuth(id uuid.UUID, user, password string) {

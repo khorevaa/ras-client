@@ -14,10 +14,6 @@ type BinaryParser interface {
 	Parse(codec Decoder, version int, reader io.Reader)
 }
 
-type Typed interface {
-	Type() int
-}
-
 type Encoder interface {
 	Bool(val bool, w io.Writer)
 	Byte(val byte, w io.Writer)

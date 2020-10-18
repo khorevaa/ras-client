@@ -1,12 +1,13 @@
 package serialize
 
 import (
+	"context"
 	uuid "github.com/satori/go.uuid"
 	"io"
 )
 
 type ClusterInfoGetter interface {
-	GetClusterInfo(cluster uuid.UUID) (ClusterInfo, error)
+	GetClusterInfo(ctx context.Context, cluster uuid.UUID) (ClusterInfo, error)
 }
 
 type ClusterInfo struct {

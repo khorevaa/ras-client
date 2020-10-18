@@ -1,41 +1,61 @@
 package rclient
 
 import (
+	"context"
 	"github.com/khorevaa/ras-client/serialize"
 	uuid "github.com/satori/go.uuid"
 )
 
-type ClientApi interface {
-	Version() int
+type Api interface {
+	Version() string
 
-	Close()
+	Close() error
 
-	AuthenticateAgent(user, password string) error
-	AuthenticateCluster(cluster uuid.UUID, user, password string) error
-	AuthenticateInfobase(cluster uuid.UUID, user, password string) error
+	authApi
+	clusterApi
+	sessionApi
+	locksApi
+	connectionsApi
+	infobaseApi
+}
 
-	GetClusters() ([]*serialize.ClusterInfo, error)
-	GetClusterInfo(cluster uuid.UUID) (serialize.ClusterInfo, error)
-	GetClusterInfobases(id uuid.UUID) (serialize.InfobaseSummaryList, error)
-	GetClusterServices(id uuid.UUID) ([]*serialize.ServiceInfo, error)
-	GetClusterManagers(id uuid.UUID) ([]*serialize.ManagerInfo, error)
+type authApi interface {
+	AuthenticateAgent(user, password string)
+	AuthenticateCluster(cluster uuid.UUID, user, password string)
+	AuthenticateInfobase(cluster uuid.UUID, user, password string)
+}
 
-	GetClusterConnections(uuid uuid.UUID) (serialize.ConnectionShortInfoList, error)
-	GetClusterSessions(cluster uuid.UUID) (serialize.SessionInfoList, error)
-	GetClusterLocks(cluster uuid.UUID) (serialize.LocksList, error)
-	DisconnectConnection(cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) error
-	TerminateSession(cluster uuid.UUID, session uuid.UUID, msg string) error
+type clusterApi interface {
+	GetClusters(ctx context.Context) ([]*serialize.ClusterInfo, error)
+	GetClusterInfo(ctx context.Context, cluster uuid.UUID) (serialize.ClusterInfo, error)
+	GetClusterInfobases(ctx context.Context, id uuid.UUID) (serialize.InfobaseSummaryList, error)
+	GetClusterServices(ctx context.Context, id uuid.UUID) ([]*serialize.ServiceInfo, error)
+	GetClusterManagers(ctx context.Context, id uuid.UUID) ([]*serialize.ManagerInfo, error)
+}
 
-	GetInfobaseInfo(cluster uuid.UUID, infobase uuid.UUID) (serialize.InfobaseInfo, error)
-	GetInfobaseConnections(cluster uuid.UUID, infobase uuid.UUID) (serialize.ConnectionShortInfoList, error)
-	GetInfobaseSessions(cluster uuid.UUID, infobase uuid.UUID) (serialize.SessionInfoList, error)
-	GetInfobaseLocks(cluster uuid.UUID, infobase uuid.UUID) (serialize.LocksList, error)
+type sessionApi interface {
+	GetClusterSessions(ctx context.Context, cluster uuid.UUID) (serialize.SessionInfoList, error)
+	GetInfobaseSessions(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID) (serialize.SessionInfoList, error)
+	TerminateSession(ctx context.Context, cluster uuid.UUID, session uuid.UUID, msg string) error
+}
 
-	CreateInfobase(cluster uuid.UUID, infobase serialize.InfobaseInfo, mode int) (serialize.InfobaseInfo, error)
-	UpdateSummaryInfobase(cluster uuid.UUID, infobase serialize.InfobaseSummaryInfo) error
-	UpdateInfobase(cluster uuid.UUID, infobase serialize.InfobaseInfo) error
-	DropInfobase(cluster uuid.UUID, infobase uuid.UUID) error
+type connectionsApi interface {
+	GetClusterConnections(ctx context.Context, uuid uuid.UUID) (serialize.ConnectionShortInfoList, error)
+	GetInfobaseConnections(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID) (serialize.ConnectionShortInfoList, error)
+	DisconnectConnection(ctx context.Context, cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) error
+}
 
-	GetSessionLocks(cluster uuid.UUID, infobase uuid.UUID, session uuid.UUID) (serialize.LocksList, error)
-	GetConnectionLocks(cluster uuid.UUID, connection uuid.UUID) (serialize.LocksList, error)
+type locksApi interface {
+	GetClusterLocks(ctx context.Context, cluster uuid.UUID) (serialize.LocksList, error)
+	GetInfobaseLocks(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID) (serialize.LocksList, error)
+	GetSessionLocks(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID, session uuid.UUID) (serialize.LocksList, error)
+	GetConnectionLocks(ctx context.Context, cluster uuid.UUID, connection uuid.UUID) (serialize.LocksList, error)
+}
+
+type infobaseApi interface {
+	CreateInfobase(ctx context.Context, cluster uuid.UUID, infobase serialize.InfobaseInfo, mode int) (serialize.InfobaseInfo, error)
+	UpdateSummaryInfobase(ctx context.Context, cluster uuid.UUID, infobase serialize.InfobaseSummaryInfo) error
+	UpdateInfobase(ctx context.Context, cluster uuid.UUID, infobase serialize.InfobaseInfo) error
+	DropInfobase(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID, mode int) error
+	GetInfobaseInfo(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID) (serialize.InfobaseInfo, error)
 }

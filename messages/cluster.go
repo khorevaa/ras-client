@@ -8,6 +8,8 @@ import (
 	"io"
 )
 
+var _ EndpointRequestMessage = (*GetClustersRequest)(nil)
+
 // GetClustersRequest получение списка кластеров
 //
 //  type GET_CLUSTERS_REQUEST = 11
@@ -51,18 +53,24 @@ func (_ *GetClustersResponse) Type() EndpointMessageType {
 	return GET_CLUSTERS_RESPONSE
 }
 
+var _ EndpointRequestMessage = (*GetClusterInfoRequest)(nil)
+
 // GetClusterInfoRequest получение информации о кластере
 //
 //  type GET_CLUSTER_INFO_REQUEST = 13
 //  kind MESSAGE_KIND = 1
 //  respond GetClustersResponse
 type GetClusterInfoRequest struct {
-	ID       uuid.UUID
-	response *GetClusterInfoResponse
+	ClusterID uuid.UUID
+	response  *GetClusterInfoResponse
+}
+
+func (r *GetClusterInfoRequest) Sig() esig.ESIG {
+	return esig.FromUuid(r.ClusterID)
 }
 
 func (r *GetClusterInfoRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
-	encoder.Uuid(r.ID, w)
+	encoder.Uuid(r.ClusterID, w)
 }
 
 func (_ *GetClusterInfoRequest) Type() EndpointMessageType {

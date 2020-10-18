@@ -1,14 +1,16 @@
 package serialize
 
 import (
+	"context"
 	"github.com/hashicorp/go-multierror"
 	uuid "github.com/satori/go.uuid"
 	"io"
+	"sync"
 	"time"
 )
 
 type ConnectionCloser interface {
-	DisconnectConnection(cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) error
+	DisconnectConnection(ctx context.Context, cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) error
 }
 
 type ConnectionSig interface {
@@ -93,24 +95,31 @@ func (l ConnectionShortInfoList) Each(fn func(info *ConnectionShortInfo)) {
 
 }
 
-func (l ConnectionShortInfoList) Disconnect(closer ConnectionCloser) (n int, err error) {
+func (l ConnectionShortInfoList) Disconnect(ctx context.Context, closer ConnectionCloser) (err error) {
 
 	var mErr *multierror.Error
-
+	var muErr sync.Mutex
+	var wg sync.WaitGroup
 	l.Each(func(info *ConnectionShortInfo) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		errDisconnect := closer.DisconnectConnection(info.Sig())
+			cluster, process, connection := info.Sig()
+			errDisconnect := closer.DisconnectConnection(ctx, cluster, process, connection)
 
-		if errDisconnect != nil {
-			_ = multierror.Append(mErr, errDisconnect)
-			return
-		}
-
-		n += 1
+			if errDisconnect != nil {
+				muErr.Lock()
+				_ = multierror.Append(mErr, errDisconnect)
+				muErr.Unlock()
+			}
+		}()
 
 	})
 
-	return
+	wg.Wait()
+
+	return mErr.ErrorOrNil()
 
 }
 

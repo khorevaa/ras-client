@@ -12,13 +12,14 @@ import (
 	"strconv"
 	"time"
 
-	bus "github.com/asaskevich/EventBus"
 	"github.com/pkg/errors"
 )
 
 const protocolVersion = 256
 
 var serviceVersions = []string{"3.0", "4.0", "5.0", "6.0", "7.0", "8.0", "9.0", "10.0"}
+
+var _ Api = (*Client)(nil)
 
 type Client struct {
 	addr  string
@@ -30,39 +31,59 @@ type Client struct {
 	agentUser     string
 	agentPassword string
 
-	pool pool.EndpointPool
+	base pool.EndpointPool
 
 	codec codec.Codec
 
 	serviceVersion string
-
-	// шина соо
-	//бщений, используется для разных нотификаций, описанных в константах нотификации
-	bus bus.Bus
 }
 
-func NewClient(addr string) *Client {
+func (c *Client) Version() string {
+	return c.serviceVersion
+}
+
+func (c *Client) Close() error {
+	panic("implement me")
+}
+
+func NewClient(addr string, opts ...Option) *Client {
+
+	opt := &Options{
+		serviceVersion: "9.0",
+		codec:          codec.NewCodec1_0(),
+	}
+
+	for _, fn := range opts {
+		fn(opt)
+	}
 
 	m := new(Client)
 	m.addr = addr
-	m.codec = codec.NewCodec1_0()
-	m.pool = pool.NewEndpointPool(&pool.Options{
-		Dialer:             m.dialFn,
-		OpenEndpoint:       m.openEndpoint,
-		CloseEndpoint:      m.closeEndpoint,
-		InitConnection:     m.initConnection,
-		PoolSize:           5,
-		MinIdleConns:       1,
-		MaxConnAge:         time.Hour,
-		IdleTimeout:        10 * time.Minute,
-		IdleCheckFrequency: 20 * time.Second,
-		PoolTimeout:        10 * time.Minute,
-	})
+	m.codec = opt.codec
+	if opt.poolOptions != nil {
+		m.base = pool.NewEndpointPool(opt.poolOptions)
+	} else {
+		m.base = pool.NewEndpointPool(m.poolOptions())
+	}
 
-	//m.serviceVersion = serviceVersions[len(serviceVersions)-1]
-	m.serviceVersion = "9.0"
+	m.serviceVersion = opt.serviceVersion
 
 	return m
+}
+
+func (c *Client) poolOptions() *pool.Options {
+	return &pool.Options{
+		Dialer:             c.dialFn,
+		OpenEndpoint:       c.openEndpoint,
+		CloseEndpoint:      c.closeEndpoint,
+		InitConnection:     c.initConnection,
+		PoolSize:           5,
+		MinIdleConns:       1,
+		MaxConnAge:         30 * time.Minute,
+		IdleTimeout:        10 * time.Minute,
+		IdleCheckFrequency: 1 * time.Minute,
+		PoolTimeout:        10 * time.Minute,
+	}
 }
 
 func (c *Client) initConnection(ctx context.Context, conn *pool.Conn) error {
@@ -298,13 +319,13 @@ func (c *Client) dialFn(ctx context.Context) (net.Conn, error) {
 
 func (c *Client) getEndpoint(ctx context.Context, sig esig.ESIG) (*pool.Endpoint, error) {
 
-	return c.pool.Get(ctx, sig)
+	return c.base.Get(ctx, sig)
 
 }
 
 func (c *Client) putEndpoint(ctx context.Context, endpoint *pool.Endpoint) {
 
-	c.pool.Put(ctx, endpoint)
+	c.base.Put(ctx, endpoint)
 
 }
 

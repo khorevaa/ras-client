@@ -1,14 +1,16 @@
 package serialize
 
 import (
+	"context"
 	"github.com/hashicorp/go-multierror"
 	uuid "github.com/satori/go.uuid"
 	"io"
+	"sync"
 	"time"
 )
 
 type SessionCloser interface {
-	TerminateSession(cluster uuid.UUID, session uuid.UUID, msg string) error
+	TerminateSession(ctx context.Context, cluster uuid.UUID, session uuid.UUID, msg string) error
 }
 
 type SessionnSig interface {
@@ -105,25 +107,30 @@ func (l SessionInfoList) Each(fn func(info *SessionInfo)) {
 
 }
 
-func (l SessionInfoList) TerminateSessions(closer SessionCloser, msg string) (n int, err error) {
+func (l SessionInfoList) TerminateSessions(ctx context.Context, closer SessionCloser, msg string) error {
 
 	var mErr *multierror.Error
-
+	var muErr sync.Mutex
+	var wg sync.WaitGroup
 	l.Each(func(info *SessionInfo) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		errDisconnect := closer.TerminateSession(info.ClusterID, info.UUID, msg)
+			errDisconnect := closer.TerminateSession(ctx, info.ClusterID, info.UUID, msg)
 
-		if errDisconnect != nil {
-			_ = multierror.Append(mErr, errDisconnect)
-			return
-		}
+			if errDisconnect != nil {
+				muErr.Lock()
+				_ = multierror.Append(mErr, errDisconnect)
+				muErr.Unlock()
+			}
 
-		n += 1
+		}()
 
 	})
+	wg.Wait()
 
-	return
-
+	return mErr.ErrorOrNil()
 }
 
 func (l SessionInfoList) filter(fn func(info *SessionInfo) bool, count int) (val SessionInfoList) {

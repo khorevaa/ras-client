@@ -1,6 +1,7 @@
 package serialize
 
 import (
+	"context"
 	uuid "github.com/satori/go.uuid"
 	"io"
 	"strings"
@@ -12,31 +13,31 @@ type InfobaseSig interface {
 }
 
 type InfobaseInfoGetter interface {
-	GetInfobaseInfo(cluster uuid.UUID, infobase uuid.UUID) (InfobaseInfo, error)
+	GetInfobaseInfo(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID) (InfobaseInfo, error)
 }
 
 type InfobaseConnectionsGetter interface {
-	GetInfobaseConnections(cluster uuid.UUID, infobase uuid.UUID) (ConnectionShortInfoList, error)
+	GetInfobaseConnections(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID) (ConnectionShortInfoList, error)
 }
 
 type InfobaseSessionsGetter interface {
-	GetInfobaseSessions(cluster uuid.UUID, infobase uuid.UUID) (SessionInfoList, error)
+	GetInfobaseSessions(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID) (SessionInfoList, error)
 }
 
 type InfobaseLocksGetter interface {
-	GetInfobaseLocks(cluster uuid.UUID, infobase uuid.UUID) (LocksList, error)
+	GetInfobaseLocks(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID) (LocksList, error)
 }
 
 type InfobaseDropper interface {
-	DropInfobase(cluster uuid.UUID, infobase uuid.UUID) error
+	DropInfobase(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID, mode int) error
 }
 
 type InfobaseSummaryUpdater interface {
-	UpdateSummaryInfobase(cluster uuid.UUID, info InfobaseSummaryInfo) error
+	UpdateSummaryInfobase(ctx context.Context, cluster uuid.UUID, info InfobaseSummaryInfo) error
 }
 
 type InfobaseUpdater interface {
-	UpdateInfobase(cluster uuid.UUID, info InfobaseInfo) error
+	UpdateInfobase(ctx context.Context, cluster uuid.UUID, info InfobaseInfo) error
 }
 
 type InfobaseBlocker interface {
@@ -153,7 +154,7 @@ func (l *InfobaseSummaryList) Parse(decoder Decoder, version int, r io.Reader) {
 }
 
 type InfobaseSummaryInfo struct {
-	Cluster     uuid.UUID `rac:"-"`
+	ClusterID   uuid.UUID `rac:"-"`
 	UUID        uuid.UUID `rac:"infobase"` //infobase : efa3672f-947a-4d84-bd58-b21997b83561
 	Name        string    //name     : УППБоеваяБаза
 	Description string    `rac:"descr"` //descr    : "УППБоеваяБаза"
@@ -161,19 +162,21 @@ type InfobaseSummaryInfo struct {
 }
 
 func (i InfobaseSummaryInfo) Sig() (uuid.UUID, uuid.UUID) {
-	return i.Cluster, i.UUID
+	return i.ClusterID, i.UUID
 }
 
-func (i InfobaseSummaryInfo) FullInfo(runner InfobaseInfoGetter) (InfobaseInfo, error) {
-	return runner.GetInfobaseInfo(i.Sig())
+func (i InfobaseSummaryInfo) FullInfo(ctx context.Context, runner InfobaseInfoGetter) (InfobaseInfo, error) {
+	cluster, infobase := i.Sig()
+	return runner.GetInfobaseInfo(ctx, cluster, infobase)
 }
 
-func (i InfobaseSummaryInfo) Drop(runner InfobaseDropper) error {
-	return runner.DropInfobase(i.Sig())
+func (i InfobaseSummaryInfo) Drop(ctx context.Context, runner InfobaseDropper, mode int) error {
+	cluster, infobase := i.Sig()
+	return runner.DropInfobase(ctx, cluster, infobase, mode)
 }
 
-func (i InfobaseSummaryInfo) Update(runner InfobaseSummaryUpdater) error {
-	return runner.UpdateSummaryInfobase(i.Cluster, i)
+func (i InfobaseSummaryInfo) Update(ctx context.Context, runner InfobaseSummaryUpdater) error {
+	return runner.UpdateSummaryInfobase(ctx, i.ClusterID, i)
 }
 
 func (i *InfobaseSummaryInfo) Parse(decoder Decoder, _ int, r io.Reader) {
@@ -290,7 +293,7 @@ func (i InfobaseInfo) Format(encoder Encoder, version int, w io.Writer) {
 
 func (i InfobaseInfo) Summary() InfobaseSummaryInfo {
 	return InfobaseSummaryInfo{
-		Cluster:     i.ClusterID,
+		ClusterID:   i.ClusterID,
 		UUID:        i.UUID,
 		Name:        i.Name,
 		Description: i.Description,
@@ -302,19 +305,21 @@ func (i InfobaseInfo) Sig() (uuid.UUID, uuid.UUID) {
 	return i.ClusterID, i.UUID
 }
 
-func (i InfobaseInfo) Drop(runner InfobaseDropper) error {
-	return runner.DropInfobase(i.Sig())
+func (i InfobaseInfo) Drop(ctx context.Context, runner InfobaseDropper, mode int) error {
+	cluster, infobase := i.Sig()
+
+	return runner.DropInfobase(ctx, cluster, infobase, mode)
 }
 
-func (i *InfobaseInfo) Update(runner InfobaseUpdater) error {
+func (i *InfobaseInfo) Update(ctx context.Context, runner InfobaseUpdater) error {
 
-	return runner.UpdateInfobase(i.ClusterID, *i)
+	return runner.UpdateInfobase(ctx, i.ClusterID, *i)
 
 }
 
-func (i *InfobaseInfo) Reload(runner InfobaseInfoGetter) error {
-
-	newInfo, err := runner.GetInfobaseInfo(i.Sig())
+func (i *InfobaseInfo) Reload(ctx context.Context, runner InfobaseInfoGetter) error {
+	cluster, infobase := i.Sig()
+	newInfo, err := runner.GetInfobaseInfo(ctx, cluster, infobase)
 	if err != nil {
 		return err
 	}
@@ -325,9 +330,9 @@ func (i *InfobaseInfo) Reload(runner InfobaseInfoGetter) error {
 
 }
 
-func (i *InfobaseInfo) GetConnections(runner InfobaseConnectionsGetter) (*ConnectionShortInfoList, error) {
-
-	list, err := runner.GetInfobaseConnections(i.Sig())
+func (i *InfobaseInfo) GetConnections(ctx context.Context, runner InfobaseConnectionsGetter) (*ConnectionShortInfoList, error) {
+	cluster, infobase := i.Sig()
+	list, err := runner.GetInfobaseConnections(ctx, cluster, infobase)
 	if err != nil {
 		return nil, err
 	}
@@ -336,9 +341,10 @@ func (i *InfobaseInfo) GetConnections(runner InfobaseConnectionsGetter) (*Connec
 	return i.Connections, err
 }
 
-func (i *InfobaseInfo) GetSessions(runner InfobaseSessionsGetter) (*SessionInfoList, error) {
+func (i *InfobaseInfo) GetSessions(ctx context.Context, runner InfobaseSessionsGetter) (*SessionInfoList, error) {
 
-	list, err := runner.GetInfobaseSessions(i.Sig())
+	cluster, infobase := i.Sig()
+	list, err := runner.GetInfobaseSessions(ctx, cluster, infobase)
 	if err != nil {
 		return nil, err
 	}
@@ -347,9 +353,10 @@ func (i *InfobaseInfo) GetSessions(runner InfobaseSessionsGetter) (*SessionInfoL
 	return i.Sessions, err
 }
 
-func (i *InfobaseInfo) GetLocks(runner InfobaseLocksGetter) (*LocksList, error) {
+func (i *InfobaseInfo) GetLocks(ctx context.Context, runner InfobaseLocksGetter) (*LocksList, error) {
 
-	list, err := runner.GetInfobaseLocks(i.Sig())
+	cluster, infobase := i.Sig()
+	list, err := runner.GetInfobaseLocks(ctx, cluster, infobase)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +416,7 @@ func (b *BlockerInfobase) ScheduledJobs(deny bool) *BlockerInfobase {
 	return b
 }
 
-func (b *BlockerInfobase) Block(runner InfobaseBlocker) error {
+func (b *BlockerInfobase) Block(ctx context.Context, runner InfobaseBlocker) error {
 
 	b.runner = runner
 
@@ -427,30 +434,30 @@ func (b *BlockerInfobase) Block(runner InfobaseBlocker) error {
 	blockInfo.SessionsDeny = true
 	blockInfo.PermissionCode = b.PermissionCode
 
-	return runner.UpdateInfobase(blockInfo.ClusterID, blockInfo)
+	return runner.UpdateInfobase(ctx, blockInfo.ClusterID, blockInfo)
 
 }
 
-func (b BlockerInfobase) UnblockWithRunner(runner InfobaseBlocker) error {
+func (b BlockerInfobase) UnblockWithRunner(ctx context.Context, runner InfobaseBlocker) error {
 
 	unblockInfo := *b.infobase
 	unblockInfo.SessionsDeny = false
-	err := runner.UpdateInfobase(unblockInfo.ClusterID, unblockInfo)
+	err := runner.UpdateInfobase(ctx, unblockInfo.ClusterID, unblockInfo)
 
 	if err != nil {
 		return err
 	}
 
 	if b.Reload {
-		err = b.infobase.Reload(runner)
+		err = b.infobase.Reload(ctx, runner)
 	}
 
 	return err
 
 }
 
-func (b BlockerInfobase) Unblock() error {
+func (b BlockerInfobase) Unblock(ctx context.Context) error {
 
-	return b.UnblockWithRunner(b.runner)
+	return b.UnblockWithRunner(ctx, b.runner)
 
 }
