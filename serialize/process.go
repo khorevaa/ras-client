@@ -104,7 +104,6 @@ func (i *ProcessInfo) Parse(decoder Decoder, version int, r io.Reader) {
 	decoder.IntPtr(&i.Connections, r)
 	decoder.StringPtr(&i.Host, r)
 	decoder.BoolPtr(&i.Enable, r)
-	decoder.StringPtr(&i.Host, r)
 
 	licenseList := LicenseInfoList{}
 	licenseList.Parse(decoder, version, r)
