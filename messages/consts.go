@@ -196,6 +196,10 @@ func (t EndpointMessageType) Parser() interface{} {
 		return &GetConnectionLockResponse{}
 	case GET_SESSION_LOCKS_RESPONSE:
 		return &GetSessionLockResponse{}
+	case GET_WORKING_PROCESS_INFO_RESPONSE:
+		return &GetWorkingProcessInfoResponse{}
+	case GET_WORKING_PROCESSES_REQUEST:
+		return &GetWorkingProcessesResponse{}
 	default:
 		panic("unknown typed parser")
 	}
