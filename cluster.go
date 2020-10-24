@@ -49,6 +49,10 @@ func (c *Client) GetClusterManagers(ctx context.Context, id uuid.UUID) ([]*seria
 
 	response := resp.(*messages.GetClusterManagersResponse)
 
+	for _, manager := range response.Managers {
+		manager.ClusterID = id
+	}
+
 	return response.Managers, err
 }
 
@@ -62,7 +66,9 @@ func (c *Client) GetClusterServices(ctx context.Context, id uuid.UUID) ([]*seria
 	}
 
 	response := resp.(*messages.GetClusterServicesResponse)
-
+	for _, service := range response.Services {
+		service.ClusterID = id
+	}
 	return response.Services, err
 }
 

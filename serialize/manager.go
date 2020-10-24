@@ -13,7 +13,7 @@ type ManagerInfo struct {
 	MainManager int
 	Port        int16  //port    : 1541
 	Description string `rac:"descr"` //descr   : "Главный менеджер кластера"
-
+	ClusterID   uuid.UUID
 }
 
 func (i *ManagerInfo) Parse(decoder Decoder, _ int, r io.Reader) {

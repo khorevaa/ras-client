@@ -10,6 +10,7 @@ type ServiceInfo struct {
 	MainOnly    int         //main-only : 0
 	Manager     []uuid.UUID //manager   : ad2754ad-9415-4689-9559-74dc36b11592
 	Description string      `rac:"descr"` //descr     : "Сервис журналов регистрации"
+	ClusterID   uuid.UUID
 }
 
 func (i *ServiceInfo) Parse(decoder Decoder, _ int, r io.Reader) {
