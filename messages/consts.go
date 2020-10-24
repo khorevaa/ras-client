@@ -198,9 +198,9 @@ func (t EndpointMessageType) Parser() interface{} {
 		return &GetSessionLockResponse{}
 	case GET_WORKING_PROCESS_INFO_RESPONSE:
 		return &GetWorkingProcessInfoResponse{}
-	case GET_WORKING_PROCESSES_REQUEST:
+	case GET_WORKING_PROCESSES_RESPONSE:
 		return &GetWorkingProcessesResponse{}
 	default:
-		panic("unknown typed parser")
+		panic("unknown typed parser id: " + string(t))
 	}
 }
