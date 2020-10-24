@@ -169,7 +169,7 @@ func (t EndpointMessageType) Parser() interface{} {
 	case GET_CLUSTERS_RESPONSE:
 		return &GetClustersResponse{}
 	case GET_CLUSTER_INFO_RESPONSE:
-		return &GetClusterInfoRequest{}
+		return &GetClusterInfoResponse{}
 	case GET_CLUSTER_MANAGERS_RESPONSE:
 		return &GetClusterManagersResponse{}
 	case GET_CLUSTER_SERVICES_REQUEST:
