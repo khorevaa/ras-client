@@ -68,7 +68,7 @@ func (c *Client) GetConnectionLocks(ctx context.Context, cluster uuid.UUID, conn
 		ConnectionID: connection,
 	}
 	resp, err := c.sendEndpointRequest(ctx, req)
-	response := resp.(*messages.GetSessionLockResponse)
+	response := resp.(*messages.GetConnectionLockResponse)
 
 	response.List.Each(func(info *serialize.LockInfo) {
 		info.ClusterID = cluster
