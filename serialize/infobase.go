@@ -154,11 +154,10 @@ func (l *InfobaseSummaryList) Parse(decoder Decoder, version int, r io.Reader) {
 }
 
 type InfobaseSummaryInfo struct {
-	ClusterID   uuid.UUID `rac:"-"`
-	UUID        uuid.UUID `rac:"infobase"` //infobase : efa3672f-947a-4d84-bd58-b21997b83561
-	Name        string    //name     : УППБоеваяБаза
-	Description string    `rac:"descr"` //descr    : "УППБоеваяБаза"
-
+	ClusterID   uuid.UUID `rac:"-" json:"cluster_id" example:""`
+	UUID        uuid.UUID `rac:"infobase" json:"uuid" example:"efa3672f-947a-4d84-bd58-b21997b83561"`
+	Name        string    `json:"name" example:"УППБоеваяБаза"`
+	Description string    `rac:"descr" json:"descr" example:"УППБоеваяБаза"`
 }
 
 func (i InfobaseSummaryInfo) Sig() (uuid.UUID, uuid.UUID) {
@@ -196,37 +195,36 @@ func (i InfobaseSummaryInfo) Format(encoder Encoder, _ int, w io.Writer) {
 }
 
 type InfobaseInfo struct {
-	UUID                                   uuid.UUID `rac:"infobase"` //infobase : efa3672f-947a-4d84-bd58-b21997b83561
-	Name                                   string    //name     : УППБоеваяБаза
-	Description                            string    `rac:"descr"` //descr    : "УППБоеваяБаза"
-	Dbms                                   string    //dbms                                       : MSSQLServer
-	DbServer                               string    //db-server                                  : sql
-	DbName                                 string    //db-name                                    : base
-	DbUser                                 string    //db-user                                    : user
-	DbPwd                                  string    `rac:"-"` //--db-pwd=<pwd>  пароль администратора базы данных
-	SecurityLevel                          int       //security-level                             : 0
-	LicenseDistribution                    int       //license-distribution                       : allow
-	ScheduledJobsDeny                      bool      //scheduled-jobs-deny                        : off
-	SessionsDeny                           bool      //sessions-deny                              : off
-	DeniedFrom                             time.Time //denied-from                                :
-	DeniedMessage                          string    //denied-message                             : "Выполняется обновление базы"
-	DeniedParameter                        string    //denied-parameter                           :
-	DeniedTo                               time.Time //denied-to                                  :
-	PermissionCode                         string    //permission-code                            : "123"
-	ExternalSessionManagerConnectionDtring string    //external-session-manager-connection-string :
-	ExternalSessionManagerRequired         bool      //external-session-manager-required          : no
-	SecurityProfileName                    string    //security-profile-name                      :
-	SafeModeSecurityProfileName            string    //safe-mode-security-profile-name            :
-	ReserveWorkingProcesses                bool      //reserve-working-processes                  : no
-	DateOffset                             int
-	Locale                                 string
+	UUID                                   uuid.UUID `rac:"infobase" json:"uuid" example:"efa3672f-947a-4d84-bd58-b21997b83561"`
+	Name                                   string    `json:"name  example:"УППБоеваяБаза"`
+	Description                            string    `rac:"descr" json:"descr" example:"Это очень хорошая база"`
+	Dbms                                   string    `json:"dbms" example:"MSSQLServer"`
+	DbServer                               string    `json:"db_server" example:"sql"`
+	DbName                                 string    `json:"db_name" example:"base"`
+	DbUser                                 string    `json:"db_user" example:"user"`
+	DbPwd                                  string    `rac:"-" json:"db_pwd" example:"password"`
+	SecurityLevel                          int       `json:"security_level" example:"0"`
+	LicenseDistribution                    int       `json:"license_distribution" example:"0"`
+	ScheduledJobsDeny                      bool      `json:"scheduled_jobs_deny" example:"false"`
+	SessionsDeny                           bool      `json:"sessions_deny" example:"false"`
+	DeniedFrom                             time.Time `json:"denied_from" example:"2020-10-01T08:30:00Z"`
+	DeniedMessage                          string    `json:"denied_message" example:"Выполняется обновление базы"`
+	DeniedParameter                        string    `json:"denied_parameter" example:"123"`
+	DeniedTo                               time.Time `json:"denied_to" example:"2020-10-01T08:30:00Z"`
+	PermissionCode                         string    `json:"permission_code" example:"123"`
+	ExternalSessionManagerConnectionString string    `json:"external_session_manager_connection_string" example:"http://auth2.com"`
+	ExternalSessionManagerRequired         bool      `json:"external_session_manager_required" example:"false"`
+	SecurityProfileName                    string    `json:"security_profile_name"  example:"sec_profile1"`
+	SafeModeSecurityProfileName            string    `json:"safe_mode_security_profile_name" example:"profile1"`
+	ReserveWorkingProcesses                bool      `json:"reserve_working_processes" example:"false"`
+	DateOffset                             int       `json:"date_offset" example:"0"`
+	Locale                                 string    `json:"locale" example:"ru_RU"`
+	ClusterID                              uuid.UUID `rac:"-" json:"cluster_id" example:"efa3672f-947a-4d84-bd58-b21997b83561"`
 
-	ClusterID uuid.UUID `rac:"-"`
-
-	Cluster     *ClusterInfo
-	Connections *ConnectionShortInfoList
-	Sessions    *SessionInfoList
-	Locks       *LocksList
+	Cluster     *ClusterInfo             `json:"-" swaggerignore:"true"`
+	Connections *ConnectionShortInfoList `json:"-" swaggerignore:"true"`
+	Sessions    *SessionInfoList         `json:"-" swaggerignore:"true"`
+	Locks       *LocksList               `json:"-" swaggerignore:"true"`
 }
 
 func (i *InfobaseInfo) Parse(decoder Decoder, version int, r io.Reader) {
@@ -250,7 +248,7 @@ func (i *InfobaseInfo) Parse(decoder Decoder, version int, r io.Reader) {
 	decoder.IntPtr(&i.SecurityLevel, r)
 	decoder.BoolPtr(&i.SessionsDeny, r)
 	decoder.IntPtr(&i.LicenseDistribution, r)
-	decoder.StringPtr(&i.ExternalSessionManagerConnectionDtring, r)
+	decoder.StringPtr(&i.ExternalSessionManagerConnectionString, r)
 	decoder.BoolPtr(&i.ExternalSessionManagerRequired, r)
 	decoder.StringPtr(&i.SecurityProfileName, r)
 	decoder.StringPtr(&i.SafeModeSecurityProfileName, r)
@@ -281,7 +279,7 @@ func (i InfobaseInfo) Format(encoder Encoder, version int, w io.Writer) {
 	encoder.Int(i.SecurityLevel, w)
 	encoder.Bool(i.SessionsDeny, w)
 	encoder.Int(i.LicenseDistribution, w)
-	encoder.String(i.ExternalSessionManagerConnectionDtring, w)
+	encoder.String(i.ExternalSessionManagerConnectionString, w)
 	encoder.Bool(i.ExternalSessionManagerRequired, w)
 	encoder.String(i.SecurityProfileName, w)
 	encoder.String(i.SafeModeSecurityProfileName, w)

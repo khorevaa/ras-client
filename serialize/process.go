@@ -64,30 +64,30 @@ func (l *ProcessInfoList) Parse(decoder Decoder, version int, r io.Reader) {
 }
 
 type ProcessInfo struct {
-	UUID                uuid.UUID `rac:"process"` // process              : 3ea9968d-159c-4b5f-9bdc-22b8ead96f74
-	Host                string    //host                 : Sport1
-	Port                int16     //port                 : 1564
-	Pid                 string    //pid                  : 5428
-	Enable              bool      `rac:"is-enable"` //is-enable            : yes
-	Running             bool      //running              : yes
-	StartedAt           time.Time //started-at           : 2018-03-29T11:16:02
-	Use                 bool      //use                  : used
-	AvailablePerfomance int       //available-perfomance : 100
-	Capacity            int       //capacity             : 1000
-	Connections         int       //connections          : 7
-	MemorySize          int       //memory-size          : 1518604
-	MemoryExcessTime    int       //memory-excess-time   : 0
-	SelectionSize       int       //selection-size       : 61341
-	AvgBackCallTime     float64   //avg-back-call-time   : 0.000
-	AvgCallTime         float64   //avg-call-time        : 0.483
-	AvgDbCallTime       float64   //avg-db-call-time     : 0.124
-	AvgLockCallTime     float64   //avg-lock-call-time   : 0.000
-	AvgServerCallTime   float64   //avg-server-call-time : -0.265
-	AvgThreads          float64   //avg-threads          : 0.281
-	Reverse             bool      //reserve              : no
-	Licenses            LicenseInfoList
+	UUID                uuid.UUID       `rac:"process" json:"uuid" example:"0e588a25-8354-4344-b935-53442312aa30"`
+	Host                string          `json:"host" example:"srv"`
+	Port                int16           `json:"port" example:"1564"`
+	Pid                 string          `json:"pid" example:"3366"`
+	Enable              bool            `rac:"is-enable" json:"enable" example:"true"`
+	Running             bool            `json:"running" example:"true"`
+	StartedAt           time.Time       `json:"started_at" example:"2018-03-29T11:16:02"`
+	Use                 bool            `json:"use" example:"true"`
+	AvailablePerfomance int             `json:"available_perfomance" example:"100"`
+	Capacity            int             `json:"capacity" example:"1000"`
+	Connections         int             `json:"connections" example:"7"`
+	MemorySize          int             `json:"memory_size" example:"1518604"`
+	MemoryExcessTime    int             `json:"memory_excess_time" example:"0"`
+	SelectionSize       int             `json:"selection_size" example:"61341"`
+	AvgBackCallTime     float64         `json:"avg_back_call_time" example:"0.000"`
+	AvgCallTime         float64         `json:"avg_call_time" example:"0.483"`
+	AvgDbCallTime       float64         `json:"avg_db_call_time" example:"0.124"`
+	AvgLockCallTime     float64         `json:"avg_lock_call_time" example:"0.000"`
+	AvgServerCallTime   float64         `json:"avg_server_call_time" example:"-0.265"`
+	AvgThreads          float64         `json:"avg_threads" example:"0.281"`
+	Reverse             bool            `json:"reverse" example:"true"`
+	Licenses            LicenseInfoList `json:"licenses"`
 
-	ClusterID uuid.UUID
+	ClusterID uuid.UUID `json:"cluster_id" example:"0e588a25-8354-4344-b935-53442312aa30"`
 }
 
 func (i *ProcessInfo) Parse(decoder Decoder, version int, r io.Reader) {

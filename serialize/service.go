@@ -6,11 +6,11 @@ import (
 )
 
 type ServiceInfo struct {
-	Name        string      //name      : EventLogService
-	MainOnly    int         //main-only : 0
-	Manager     []uuid.UUID //manager   : ad2754ad-9415-4689-9559-74dc36b11592
-	Description string      `rac:"descr"` //descr     : "Сервис журналов регистрации"
-	ClusterID   uuid.UUID
+	Name        string      `json:"name" example:"EventLogService"`
+	MainOnly    int         `json:"main_only" example:"0"`
+	Manager     []uuid.UUID `json:"manager" example:"[ad2754ad-9415-4689-9559-74dc36b11592]"`
+	Description string      `rac:"descr" json:"descr" example:"Сервис журналов регистрации"`
+	ClusterID   uuid.UUID   `json:"cluster_id" example:"0e588a25-8354-4344-b935-53442312aa30"`
 }
 
 func (i *ServiceInfo) Parse(decoder Decoder, _ int, r io.Reader) {

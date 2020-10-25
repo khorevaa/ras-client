@@ -200,6 +200,12 @@ func (t EndpointMessageType) Parser() interface{} {
 		return &GetWorkingProcessInfoResponse{}
 	case GET_WORKING_PROCESSES_RESPONSE:
 		return &GetWorkingProcessesResponse{}
+	case GET_WORKING_SERVERS_RESPONSE:
+		return &GetWorkingServersResponse{}
+	case GET_WORKING_SERVER_INFO_RESPONSE:
+		return &GetWorkingServerInfoResponse{}
+	case REG_WORKING_SERVER_RESPONSE:
+		return &RegWorkingServerResponse{}
 	default:
 		panic("unknown typed parser id: " + string(t))
 	}

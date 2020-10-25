@@ -18,6 +18,7 @@ type Api interface {
 	connectionsApi
 	infobaseApi
 	processesApi
+	serversApi
 }
 
 type authApi interface {
@@ -56,6 +57,13 @@ type locksApi interface {
 type processesApi interface {
 	GetWorkingProcesses(ctx context.Context, clusterID uuid.UUID) (serialize.ProcessInfoList, error)
 	GetWorkingProcessInfo(ctx context.Context, clusterID, processID uuid.UUID) (*serialize.ProcessInfo, error)
+}
+
+type serversApi interface {
+	GetWorkingServers(ctx context.Context, clusterID uuid.UUID) ([]*serialize.ServerInfo, error)
+	GetWorkingServerInfo(ctx context.Context, clusterID, serverID uuid.UUID) (*serialize.ServerInfo, error)
+	RegWorkingServer(ctx context.Context, clusterID uuid.UUID, info *serialize.ServerInfo) (*serialize.ServerInfo, error)
+	UnRegWorkingServer(ctx context.Context, clusterID, serverID uuid.UUID) error
 }
 
 type infobaseApi interface {

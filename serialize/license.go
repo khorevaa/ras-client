@@ -112,23 +112,23 @@ func (l *LicenseInfoList) Parse(decoder Decoder, version int, r io.Reader) {
 }
 
 type LicenseInfo struct {
-	ProcessID uuid.UUID // process            : 94232f94-be78-4acd-a11e-09911bd4f4ed
-	SessionID uuid.UUID // session            : e45c1c2b-b3ac-4fea-9f0c-0583ad65d117
-	// UserName       string    //user-name          : User
-	//Host           string    //host               : host
-	//AppId          string    //app-id             : 1CV8
-	FullName          string // full-name          :
-	Series            string // series             : "ORG8A"
-	IssuedByServer    bool   // issued-by-server   : yes
-	LicenseType       int    // license-type       : HASP
-	Net               bool   // net                : yes
-	MaxUsersAll       int    // max-users-all      : 300
-	MaxUsersCur       int    //max-users-cur      : 300
-	RmngrAddress      string //rmngr-address      : "app"
-	RmngrPort         int    //rmngr-port         : 1541
-	RmngrPid          string //rmngr-pid          : 2300
-	ShortPresentation string //short-presentation : "Сервер, ORG8A Сет 300"
-	FullPresentation  string //full-presentation  : "Сервер, 2300, app, 1541, ORG8A Сетевой 300"
+	ProcessID         uuid.UUID `json:"process_id" example:"94232f94-be78-4acd-a11e-09911bd4f4ed"`
+	SessionID         uuid.UUID `json:"session_id" example:"e45c1c2b-b3ac-4fea-9f0c-0583ad65d117"`
+	UserName          string    `json:"user_name" example:"User"`
+	Host              string    `json:"host" example:"host"`
+	AppId             string    `json:"app_id" example:"1CV8"`
+	FullName          string    `json:"full_name" example:"FullName"`
+	Series            string    `json:"series" example:"ORG8A"`
+	IssuedByServer    bool      `json:"issued_by_server" example:"true"`
+	LicenseType       int       `json:"license_type" example:"0"` // license-type       : HASP
+	Net               bool      `json:"net" example:"true"`
+	MaxUsersAll       int       `json:"max_users_all" example:"300"`
+	MaxUsersCur       int       `json:"max_users_cur" example:"300"`
+	RmngrAddress      string    `json:"rmngr_address" example:"app"`
+	RmngrPort         int       `json:"rmngr_port" example:"1541"`
+	RmngrPid          string    `json:"rmngr_pid" example:"2300"`
+	ShortPresentation string    `json:"short_presentation" example:"Сервер, ORG8A Сет 300"`
+	FullPresentation  string    `json:"full_presentation" example:"Сервер, 2300, app, 1541, ORG8A Сетевой 300"`
 }
 
 func (i *LicenseInfo) Parse(decoder Decoder, _ int, r io.Reader) {

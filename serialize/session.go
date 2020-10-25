@@ -173,58 +173,57 @@ func (l *SessionInfoList) Parse(decoder Decoder, version int, r io.Reader) {
 }
 
 type SessionInfo struct {
-	UUID                          uuid.UUID `rac:"session"`    // UUID session                          : 1fb5f037-99e8-4924-a99d-a9e687522d32
-	ID                            int       `rac:"session-id"` // ID session-id                       : 1
-	InfobaseID                    uuid.UUID // InfobaseID infobase               : aea71760-15b3-485a-9a35-506eb8a0b04a
-	ConnectionID                  uuid.UUID // connection                      : 8adf4514-0379-4333-a153-0b2689edc415
-	ProcessID                     uuid.UUID // process                         : 1af2e54f-d95a-4370-9b45-8277280cad23
-	UserName                      string    // user-name                       : АКузнецов
-	Host                          string    //host                             : Sport1
-	AppId                         string    //app-id                           : Designer
-	Locale                        string    //locale                           : ru_RU
-	StartedAt                     time.Time //started-at                       : 2018-04-09T14:51:31
-	LastActiveAt                  time.Time //last-active-at                   : 2018-05-14T11:12:33
-	Hibernate                     bool      // hibernate                        : no
-	PassiveSessionHibernateTime   int       //passive-session-hibernate-time   : 1200
-	HibernateDessionTerminateTime int       //hibernate-session-terminate-time : 86400
-	BlockedByDbms                 int       //blocked-by-dbms                  : 0
-	BlockedByLs                   int       //blocked-by-ls                    : 0
-	BytesAll                      int64     //bytes-all                        : 105972550
-	BytesLast5min                 int64     `rac:"bytes-last-5min"` //bytes-last-5min                  : 0
-	CallsAll                      int       //calls-all                        : 119052
-	CallsLast5min                 int64     `rac:"calls-last-5min"` //calls-last-5min                  : 0
-	DbmsBytesAll                  int64     //dbms-bytes-all                   : 317824922
-	DbmsBytesLast5min             int64     `rac:"dbms-bytes-last-5min"` //dbms-bytes-last-5min             : 0
-	DbProcInfo                    string    //db-proc-info                     :
-	DbProcTook                    int       //db-proc-took                     : 0
-	DbProcTookAt                  time.Time //db-proc-took-at                  :
-	DurationAll                   int       //duration-all                     : 66184
-	DurationAllDbms               int       //duration-all-dbms                : 43242
-	DurationCurrent               int       //duration-current                 : 0
-	DurationCurrentDbms           int       //duration-current-dbms            : 0
-	DurationLast5Min              int64     `rac:"duration-last-5min"`      //duration-last-5min               : 0
-	DurationLast5MinDbms          int64     `rac:"duration-last-5min-dbms"` //duration-last-5min-dbms          : 0
-	MemoryCurrent                 int64     //memory-current                   : 0
-	MemoryLast5min                int64     //memory-last-5min                 : 416379
-	MemoryTotal                   int64     //memory-total                     : 23178863
-	ReadCurrent                   int64     //read-current                     : 0
-	ReadLast5min                  int64     //read-last-5min                   : 0
-	ReadTotal                     int64     //read-total                       : 156162
-	WriteCurrent                  int64     //write-current                    : 0
-	WriteLast5min                 int64     ///write-last-5min                  : 0
-	WriteTotal                    int64     //write-total                      : 1071457
-	DurationCurrentService        int       //duration-current-service         : 0
-	DurationLast5minService       int64     //duration-last-5min-service       : 30
-	DurationAllService            int       //duration-all-service             : 515
-	CurrentServiceName            string    //current-service-name             :
-	CpuTimeCurrent                int64     //cpu-time-current                 : 0
-	CpuTimeLast5min               int64     //cpu-time-last-5min               : 280
-	CpuTimeTotal                  int64     //cpu-time-total                   : 6832
-	DataSeparation                string    //data-separation                  : ''
-	ClientIPAddress               string    //client-ip                        :
-
-	Licenses  *LicenseInfoList
-	ClusterID uuid.UUID
+	UUID                          uuid.UUID        `rac:"session" json:"uuid" example:"1fb5f037-99e8-4924-a99d-a9e687522d32"`
+	ID                            int              `rac:"session-id" json:"id" example:"12"`
+	InfobaseID                    uuid.UUID        `json:"infobase_id" example:"aea71760-15b3-485a-9a35-506eb8a0b04a"`
+	ConnectionID                  uuid.UUID        `json:"connection_id" example:"8adf4514-0379-4333-a153-0b2689edc415"`
+	ProcessID                     uuid.UUID        `json:"process_id" example:"1af2e54f-d95a-4370-9b45-8277280cad23"`
+	UserName                      string           `json:"user_name" example:"АКузнецов"`
+	Host                          string           `json:"host" example:"host"`
+	AppId                         string           `json:"app_id" example:"Designer"`
+	Locale                        string           `json:"locale" example:"ru_RU"`
+	StartedAt                     time.Time        `json:"started_at" example:"2018-04-09T14:51:31"`
+	LastActiveAt                  time.Time        `json:"last_active_at" example:"2018-04-09T14:51:31"`
+	Hibernate                     bool             `json:"hibernate" example:"true"`
+	PassiveSessionHibernateTime   int              `json:"passive_session_hibernate_time" example:"1200"`
+	HibernateDessionTerminateTime int              `json:"hibernate_dession_terminate_time" example:"86400"`
+	BlockedByDbms                 int              `json:"blocked_by_dbms" example:"0"`
+	BlockedByLs                   int              `json:"blocked_by_ls" example:"0"`
+	BytesAll                      int64            `json:"bytes_all" example:"105972550"`
+	BytesLast5min                 int64            `rac:"bytes-last-5min" json:"bytes_last_5_min" example:"0"`
+	CallsAll                      int              `json:"calls_all" example:"119052"`
+	CallsLast5min                 int64            `rac:"calls-last-5min" json:"calls_last_5_min" example:"0"`
+	DbmsBytesAll                  int64            `json:"dbms_bytes_all" example:"317824922"`
+	DbmsBytesLast5min             int64            `rac:"dbms-bytes-last-5min" json:"dbms_bytes_last_5_min" example:"0"`
+	DbProcInfo                    string           `json:"db_proc_info" example:"DbProcInfo"`
+	DbProcTook                    int              `json:"db_proc_took" example:"0"`
+	DbProcTookAt                  time.Time        `json:"db_proc_took_at" example:"2018-04-09T14:51:31"`
+	DurationAll                   int              `json:"duration_all" example:"66184"`
+	DurationAllDbms               int              `json:"duration_all_dbms" example:"43242"`
+	DurationCurrent               int              `json:"duration_current" example:"0"`
+	DurationCurrentDbms           int              `json:"duration_current_dbms" example:"0"`
+	DurationLast5Min              int64            `rac:"duration-last-5min" json:"duration_last_5_min" example:"0"`
+	DurationLast5MinDbms          int64            `rac:"duration-last-5min-dbms" json:"duration_last_5_min_dbms" example:"0"`
+	MemoryCurrent                 int64            `json:"memory_current" example:"0"`
+	MemoryLast5min                int64            `json:"memory_last_5_min" example:"416379"`
+	MemoryTotal                   int64            `json:"memory_total" example:"23178863"`
+	ReadCurrent                   int64            `json:"read_current" example:"156162"`
+	ReadLast5min                  int64            `json:"read_last_5_min" example:"156162"`
+	ReadTotal                     int64            `json:"read_total" example:"15616"`
+	WriteCurrent                  int64            `json:"write_current" example:"0"`
+	WriteLast5min                 int64            `json:"write_last_5_min" example:"123"`
+	WriteTotal                    int64            `json:"write_total" example:"1071457"`
+	DurationCurrentService        int              `json:"duration_current_service" example:"0"`
+	DurationLast5minService       int64            `json:"duration_last_5_min_service" example:"30"`
+	DurationAllService            int              `json:"duration_all_service" example:"515"`
+	CurrentServiceName            string           `json:"current_service_name" example:"name"`
+	CpuTimeCurrent                int64            `json:"cpu_time_current" example:"0"`
+	CpuTimeLast5min               int64            `json:"cpu_time_last_5_min" example:"280"`
+	CpuTimeTotal                  int64            `json:"cpu_time_total" example:"6832"`
+	DataSeparation                string           `json:"data_separation" example:"sep=1"`
+	ClientIPAddress               string           `json:"client_ip_address" example:"127.0.0.1"`
+	Licenses                      *LicenseInfoList `json:"licenses"`
+	ClusterID                     uuid.UUID        `json:"cluster_id" example:"0e588a25-8354-4344-b935-53442312aa30"`
 }
 
 func (i SessionInfo) Sig() (cluster uuid.UUID, session uuid.UUID) {
@@ -307,6 +306,8 @@ func (i *SessionInfo) Parse(decoder Decoder, version int, r io.Reader) {
 	i.Licenses.Each(func(info *LicenseInfo) {
 		info.SessionID = i.UUID
 		info.ProcessID = i.ProcessID
+		info.AppId = i.AppId
+		info.UserName = i.UserName
 	})
 
 }

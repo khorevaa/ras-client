@@ -35,15 +35,14 @@ func (l *LocksList) Parse(decoder Decoder, version int, r io.Reader) {
 }
 
 type LockInfo struct {
-	ClusterID  uuid.UUID
-	InfobaseID uuid.UUID
+	ClusterID  uuid.UUID `json:"cluster_id" example:"00000000-0000-0000-0000-000000000000"`
+	InfobaseID uuid.UUID `json:"infobase_id" example:"8b8a0817-4cb1-4e13-9a8f-472dde1a3b47"`
 
-	ConnectionID uuid.UUID //connection : 00000000-0000-0000-0000-000000000000
-	SessionID    uuid.UUID //session    : 8b8a0817-4cb1-4e13-9a8f-472dde1a3b47
-	ObjectID     uuid.UUID //object     : 00000000-0000-0000-0000-000000000000
-	LockedAt     time.Time //locked     : 2020-10-01T08:30:00
-	Description  string    `rac:"descr"` //descr      : "БД(сеанс ,УППБоеваяБаза,разделяемая)"
-
+	ConnectionID uuid.UUID `json:"connection_id" example:"00000000-0000-0000-0000-000000000000"`
+	SessionID    uuid.UUID `json:"session_id" example:"8b8a0817-4cb1-4e13-9a8f-472dde1a3b47"`
+	ObjectID     uuid.UUID `json:"object_id" example:"00000000-0000-0000-0000-000000000000"`
+	LockedAt     time.Time `json:"locked_at" example:"2020-10-01T08:30:00"`
+	Description  string    `rac:"descr" json:"descr" example:"БД(сеанс ,УППБоеваяБаза,разделяемая)"`
 }
 
 func (i *LockInfo) Parse(decoder Decoder, _ int, r io.Reader) {

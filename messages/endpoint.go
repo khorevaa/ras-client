@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"fmt"
 	"github.com/k0kubun/pp"
 	"github.com/khorevaa/ras-client/protocol/codec"
 	"io"
@@ -41,7 +42,7 @@ func (m *EndpointMessageFailure) Type() EndpointMessageKind {
 }
 
 func (m *EndpointMessageFailure) Error() string {
-	return pp.Sprintf("endpoint: %s service: %s msg: %s", m.EndpointID, m.ServiceID, m.Message)
+	return fmt.Sprintf("endpoint: %d service: %s msg: %s", m.EndpointID, m.ServiceID, m.Message)
 }
 
 type EndpointMessage struct {

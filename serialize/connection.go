@@ -163,16 +163,16 @@ func (l *ConnectionShortInfoList) Parse(decoder Decoder, version int, r io.Reade
 }
 
 type ConnectionShortInfo struct {
-	UUID        uuid.UUID `rac:"connection"` //connection     : cd16cde9-6372-4664-ac61-b0ae5cb24478
-	ID          int       `rac:"conn-id"`    //conn-id        : 8714
-	Host        string    //host           : srv-uk-term-09
-	Process     uuid.UUID //process        : 94232f94-be78-4acd-a11e-09911bd4f4ed
-	ClusterID   uuid.UUID `rac:"-"` //cluster        : 94232f94-be78-4acd-a11e-09911bd4f4ed
-	InfobaseID  uuid.UUID //infobase       : efa3672f-947a-4d84-bd58-b21997b83561
-	Application string    //application    : "1CV8"
-	ConnectedAt time.Time //connected-at   : 2020-10-01T07:29:57
-	SessionID   int       `rac:"session-number"` //session-number : 148542
-	BlockedByLs int       //blocked-by-ls  : 0
+	UUID        uuid.UUID `rac:"connection" json:"uuid" example:"cd16cde9-6372-4664-ac61-b0ae5cb24478"`
+	ID          int       `rac:"conn-id" json:"conn_id" example:"8714"`
+	Host        string    `json:"host" example:"host"`
+	Process     uuid.UUID `json:"process" example:"94232f94-be78-4acd-a11e-09911bd4f4ed"`
+	ClusterID   uuid.UUID `rac:"-" json:"cluster_id" example:"94232f94-be78-4acd-a11e-09911bd4f4ed"`
+	InfobaseID  uuid.UUID `json:"infobase_id" example:"efa3672f-947a-4d84-bd58-b21997b83561"`
+	Application string    `json:"application" example:"1CV8"`
+	ConnectedAt time.Time `json:"connected_at" example:"2020-10-01T07:29:57"`
+	SessionID   int       `rac:"session-number" json:"session_id" example:"148542"`
+	BlockedByLs int       `json:"blocked_by_ls" example:"0"`
 }
 
 func (i *ConnectionShortInfo) Parse(decoder Decoder, _ int, r io.Reader) {
@@ -196,16 +196,16 @@ func (i ConnectionShortInfo) Sig() (cluster uuid.UUID, process uuid.UUID, connec
 type ConnectionInfoList []*ConnectionInfo
 
 type ConnectionInfo struct {
-	UUID        uuid.UUID `rac:"connection"` //connection     : cd16cde9-6372-4664-ac61-b0ae5cb24478
-	ID          int       `rac:"conn-id"`    //conn-id        : 8714
-	Host        string    //host           : srv-uk-term-09
-	Process     uuid.UUID //process        : 94232f94-be78-4acd-a11e-09911bd4f4ed
-	ClusterID   uuid.UUID `rac:"-"` //cluster        : 94232f94-be78-4acd-a11e-09911bd4f4ed
-	InfobaseID  uuid.UUID //infobase       : efa3672f-947a-4d84-bd58-b21997b83561
-	Application string    //application    : "1CV8"
-	ConnectedAt time.Time //connected-at   : 2020-10-01T07:29:57
-	SessionID   int       `rac:"session-number"` //session-number : 148542
-	BlockedByLs int       //blocked-by-ls  : 0
+	UUID        uuid.UUID `rac:"connection" json:"uuid" example:"cd16cde9-6372-4664-ac61-b0ae5cb24478"`
+	ID          int       `rac:"conn-id" json:"conn_id" example:"8714"`
+	Host        string    `json:"host" example:"host"`
+	Process     uuid.UUID `json:"process" example:"94232f94-be78-4acd-a11e-09911bd4f4ed"`
+	ClusterID   uuid.UUID `rac:"-" json:"cluster_id" example:"94232f94-be78-4acd-a11e-09911bd4f4ed"`
+	InfobaseID  uuid.UUID `json:"infobase_id" example:"efa3672f-947a-4d84-bd58-b21997b83561"`
+	Application string    `json:"application" example:"1CV8"`
+	ConnectedAt time.Time `json:"connected_at" example:"2020-10-01T07:29:57"`
+	SessionID   int       `rac:"session-number" json:"session_id" example:"148542"`
+	BlockedByLs int       `json:"blocked_by_ls" example:"0"`
 }
 
 func (i *ConnectionInfo) Parse(decoder Decoder, _ int, r io.Reader) {
