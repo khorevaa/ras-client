@@ -204,7 +204,6 @@ func decodeSize(r io.Reader) (int, error) {
 		size += (cur & 0x7F) << shift
 		shift += 7
 
-		return size, nil
 	}
 
 	return size, nil
