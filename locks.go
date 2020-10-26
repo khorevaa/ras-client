@@ -15,6 +15,11 @@ func (c *Client) GetClusterLocks(ctx context.Context, cluster uuid.UUID) (serial
 		ClusterID: cluster,
 	}
 	resp, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return nil, err
+	}
+
 	response := resp.(*messages.GetLocksResponse)
 
 	response.List.Each(func(info *serialize.LockInfo) {
@@ -31,6 +36,11 @@ func (c *Client) GetInfobaseLocks(ctx context.Context, cluster uuid.UUID, infoba
 		InfobaseID: infobase,
 	}
 	resp, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return nil, err
+	}
+
 	response := resp.(*messages.GetInfobaseLockResponse)
 
 	response.List.Each(func(info *serialize.LockInfo) {
@@ -50,6 +60,11 @@ func (c *Client) GetSessionLocks(ctx context.Context, cluster uuid.UUID, infobas
 		SessionID:  session,
 	}
 	resp, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return nil, err
+	}
+
 	response := resp.(*messages.GetSessionLockResponse)
 
 	response.List.Each(func(info *serialize.LockInfo) {
@@ -68,6 +83,11 @@ func (c *Client) GetConnectionLocks(ctx context.Context, cluster uuid.UUID, conn
 		ConnectionID: connection,
 	}
 	resp, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return nil, err
+	}
+
 	response := resp.(*messages.GetConnectionLockResponse)
 
 	response.List.Each(func(info *serialize.LockInfo) {

@@ -28,6 +28,11 @@ func (c *Client) GetInfobaseSessions(ctx context.Context, cluster uuid.UUID, inf
 		InfobaseID: infobase,
 	}
 	resp, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return nil, err
+	}
+
 	response := resp.(*messages.GetInfobaseSessionsResponse)
 
 	response.Sessions.Each(func(info *serialize.SessionInfo) {
@@ -44,6 +49,11 @@ func (c *Client) GetClusterSessions(ctx context.Context, cluster uuid.UUID) (ser
 		ClusterID: cluster,
 	}
 	resp, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return nil, err
+	}
+
 	response := resp.(*messages.GetSessionsResponse)
 
 	response.Sessions.Each(func(info *serialize.SessionInfo) {
