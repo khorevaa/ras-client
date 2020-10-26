@@ -31,15 +31,12 @@ func NewPacket(byteCode byte, data []byte) *Packet {
 		Type:   byteCode,
 		Length: len(data),
 		Data:   data,
+		reader: bytes.NewReader(data),
 	}
 }
 
 // Read read the packet data
 func (packet *Packet) Read(p []byte) (n int, err error) {
-
-	if packet.reader == nil {
-		packet.reader = bytes.NewReader(packet.Data)
-	}
 
 	return packet.reader.Read(p)
 

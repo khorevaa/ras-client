@@ -91,7 +91,6 @@ var _ EndpointRequestMessage = (*GetSessionsRequest)(nil)
 //  respond GetSessionsResponse
 type GetSessionsRequest struct {
 	ClusterID uuid.UUID
-	response  *GetSessionsResponse
 }
 
 func (r *GetSessionsRequest) Sig() esig.ESIG {
