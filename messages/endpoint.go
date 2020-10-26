@@ -55,6 +55,17 @@ type EndpointMessage struct {
 
 func (m *EndpointMessage) Parse(decoder codec.Decoder, version int, reader io.Reader) {
 
+	if m.EndpointFormat == int16(256) {
+
+		spacebytes := make([]byte, 2)
+		_, err := reader.Read(spacebytes)
+
+		if err != nil {
+			panic(err)
+		}
+
+	}
+
 	m.Kind = EndpointMessageKind(decoder.Byte(reader))
 
 	switch m.Kind {
