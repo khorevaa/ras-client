@@ -196,7 +196,7 @@ func (i InfobaseSummaryInfo) Format(encoder Encoder, _ int, w io.Writer) {
 
 type InfobaseInfo struct {
 	UUID                                   uuid.UUID `rac:"infobase" json:"uuid" example:"efa3672f-947a-4d84-bd58-b21997b83561"`
-	Name                                   string    `json:"name  example:"УППБоеваяБаза"`
+	Name                                   string    `json:"name" example:"УППБоеваяБаза"`
 	Description                            string    `rac:"descr" json:"descr" example:"Это очень хорошая база"`
 	Dbms                                   string    `json:"dbms" example:"MSSQLServer"`
 	DbServer                               string    `json:"db_server" example:"sql"`

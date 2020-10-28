@@ -441,7 +441,7 @@ func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req me
 		return nil
 	}
 
-	user, password := p.GetInfobaseAuth(clusterID)
+	user, password := p.GetInfobaseAuth(infobaseID)
 
 	authMessage := endpoint.newEndpointMessage(messages.AuthenticateInfobaseRequest{
 		ClusterID: clusterID,
