@@ -306,6 +306,7 @@ func (i *SessionInfo) Parse(decoder Decoder, version int, r io.Reader) {
 	i.Licenses.Each(func(info *LicenseInfo) {
 		info.SessionID = i.UUID
 		info.ProcessID = i.ProcessID
+		info.Host = i.Host
 		info.AppId = i.AppId
 		info.UserName = i.UserName
 	})

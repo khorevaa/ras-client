@@ -115,7 +115,7 @@ func (e *Endpoint) CheckInfobaseAuth(user, pwd string) bool {
 }
 
 func (e *Endpoint) SetInfobaseAuth(user, pwd string) {
-	e.clusterHash = calcHash(fmt.Sprintf("%s:%s", user, pwd))
+	e.infobaseHash = calcHash(fmt.Sprintf("%s:%s", user, pwd))
 }
 
 func (e *Endpoint) sendRequest(ctx context.Context, message *messages.EndpointMessage) (*messages.EndpointMessage, error) {
