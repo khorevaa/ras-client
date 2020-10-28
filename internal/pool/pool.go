@@ -404,44 +404,68 @@ func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req me
 	}
 
 	if esig.Equal(endpoint.sig, sig) {
-		return nil
+		return p.updateAuthIfNeed(ctx, endpoint, sig.High(), sig.Low())
 	}
 
-	clusterID, infobaseID := sig.High(), sig.Low()
+	err := p.updateAuthIfNeed(ctx, endpoint, sig.High(), sig.Low())
+	if err != nil {
+		return err
+	}
 
-	if !esig.HighBoundEqual(endpoint.sig, clusterID) {
+	endpoint.sig = sig
 
-		user, password := p.GetClusterAuth(clusterID)
+	return nil
+}
 
-		authMessage := endpoint.newEndpointMessage(messages.ClusterAuthenticateRequest{
-			ClusterID: clusterID,
-			User:      user,
-			Password:  password,
-		})
+func (p *endpointPool) updateAuthIfNeed(ctx context.Context, endpoint *Endpoint, clusterID, infobaseID uuid.UUID) error {
 
-		message, err := endpoint.sendRequest(ctx, authMessage)
-
+	if user, password := p.GetClusterAuth(clusterID); !endpoint.CheckClusterAuth(user, password) {
+		err := p.updateClusterAuth(ctx, endpoint, clusterID, user, password)
 		if err != nil {
 			return err
 		}
+	}
 
-		switch err := message.Message.(type) {
-
-		case *messages.EndpointMessageFailure:
-
+	if user, password := p.GetInfobaseAuth(infobaseID); !endpoint.CheckInfobaseAuth(user, password) {
+		err := p.updateInfobaseAuth(ctx, endpoint, clusterID, user, password)
+		if err != nil {
 			return err
-
 		}
+	}
 
-		endpoint.sig = esig.FromUuid(clusterID)
+	return nil
+
+}
+
+func (p *endpointPool) updateClusterAuth(ctx context.Context, endpoint *Endpoint, clusterID uuid.UUID, user, password string) error {
+
+	authMessage := endpoint.newEndpointMessage(messages.ClusterAuthenticateRequest{
+		ClusterID: clusterID,
+		User:      user,
+		Password:  password,
+	})
+
+	message, err := endpoint.sendRequest(ctx, authMessage)
+
+	if err != nil {
+		return err
+	}
+
+	switch err := message.Message.(type) {
+
+	case *messages.EndpointMessageFailure:
+
+		return err
 
 	}
 
-	if uuid.Equal(infobaseID, uuid.Nil) {
-		return nil
-	}
+	endpoint.SetClusterAuth(user, password)
 
-	user, password := p.GetInfobaseAuth(infobaseID)
+	return nil
+
+}
+
+func (p *endpointPool) updateInfobaseAuth(ctx context.Context, endpoint *Endpoint, clusterID uuid.UUID, user, password string) error {
 
 	authMessage := endpoint.newEndpointMessage(messages.AuthenticateInfobaseRequest{
 		ClusterID: clusterID,
@@ -463,9 +487,10 @@ func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req me
 
 	}
 
-	endpoint.sig = sig
+	endpoint.SetInfobaseAuth(user, password)
 
 	return nil
+
 }
 
 func (p *endpointPool) getAuth(idx map[uuid.UUID]struct{ user, password string }, id uuid.UUID) (user, password string) {

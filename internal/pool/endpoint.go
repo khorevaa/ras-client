@@ -3,11 +3,14 @@ package pool
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"github.com/khorevaa/ras-client/messages"
 	"github.com/khorevaa/ras-client/protocol/codec"
 	"github.com/khorevaa/ras-client/serialize/esig"
 	"io"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -44,8 +47,22 @@ type Endpoint struct {
 	pooled    bool
 	Inited    bool
 
-	sig       esig.ESIG
-	onRequest func(ctx context.Context, endpoint *Endpoint, req messages.EndpointRequestMessage) error
+	sig          esig.ESIG
+	clusterHash  string
+	infobaseHash string
+	onRequest    func(ctx context.Context, endpoint *Endpoint, req messages.EndpointRequestMessage) error
+}
+
+func calcHash(in string) string {
+
+	str := base64.StdEncoding.EncodeToString([]byte(in))
+	return str
+}
+
+func checkHash(val1, val2 string) bool {
+
+	return strings.EqualFold(val1, val2)
+
 }
 
 func (e *Endpoint) Sig() esig.ESIG {
@@ -83,6 +100,22 @@ func (e *Endpoint) ServiceID() string {
 
 func (e *Endpoint) Codec() codec.Codec {
 	return e.codec
+}
+
+func (e *Endpoint) CheckClusterAuth(user, pwd string) bool {
+	return checkHash(e.clusterHash, calcHash(fmt.Sprintf("%s:%s", user, pwd)))
+}
+
+func (e *Endpoint) SetClusterAuth(user, pwd string) {
+	e.clusterHash = calcHash(fmt.Sprintf("%s:%s", user, pwd))
+}
+
+func (e *Endpoint) CheckInfobaseAuth(user, pwd string) bool {
+	return checkHash(e.infobaseHash, calcHash(fmt.Sprintf("%s:%s", user, pwd)))
+}
+
+func (e *Endpoint) SetInfobaseAuth(user, pwd string) {
+	e.clusterHash = calcHash(fmt.Sprintf("%s:%s", user, pwd))
 }
 
 func (e *Endpoint) sendRequest(ctx context.Context, message *messages.EndpointMessage) (*messages.EndpointMessage, error) {
