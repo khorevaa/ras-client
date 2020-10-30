@@ -15,6 +15,9 @@ type Option func(opt *Options)
 
 func WithVersion(version string) Option {
 	return func(opt *Options) {
+		if len(version) == 0 {
+			return
+		}
 		opt.serviceVersion = version
 	}
 }
