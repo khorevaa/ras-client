@@ -194,6 +194,10 @@ func (m *CauseError) Parse(c codec.Decoder, r io.Reader) {
 
 	m.Cause = tryParseCauseError(c, r)
 
+	if m.Cause != nil && len(m.Cause.Message) == 0 && m.Cause.Cause == nil {
+		m.Cause = nil
+	}
+
 }
 
 func tryParseCauseError(c codec.Decoder, r io.Reader) (err *CauseError) {
