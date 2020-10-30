@@ -126,13 +126,14 @@ func (c *Client) openEndpoint(ctx context.Context, conn *pool.Conn) (info pool.E
 	ack, err = c.tryOpenEndpoint(ctx, conn)
 	if err != nil {
 
-		message, ok := err.(*messages.EndpointMessageFailure)
+		message, ok := err.(*messages.EndpointFailure)
+
 		if !ok {
 			return nil, err
 		}
 		supportedVersion := detectSupportedVersion(message)
 		if len(supportedVersion) > 0 {
-			return nil, errors.New(pp.Sprint("ras no supported service version", serviceVersions))
+			return nil, err
 		}
 
 		c.serviceVersion = supportedVersion
