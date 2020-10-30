@@ -167,12 +167,45 @@ func (m *CloseEndpointMessage) Format(c codec.Encoder, w io.Writer) {
 type causeError struct {
 	service string
 	msg     string
+	err     *causeError
 }
 
 func (e *causeError) Error() string {
 
+	if e.err != nil {
+		return fmt.Sprintf("service-err: %s msg-err: %s %s", e.service, e.msg, e.err.Error())
+	}
+
 	return fmt.Sprintf("service-err: %s msg-err: %s", e.service, e.msg)
 
+}
+
+func (m *causeError) Parse(c codec.Decoder, r io.Reader) {
+
+	m.service = c.String(r)
+	m.msg = c.String(r)
+	errSize := c.Size(r)
+
+	if errSize > 0 {
+
+		panic("TODO ")
+
+	}
+
+	m.err = tryParseCauseError(c, r)
+
+}
+
+func tryParseCauseError(c codec.Decoder, r io.Reader) (err *causeError) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = nil
+		}
+	}()
+
+	err = &causeError{}
+	err.Parse(c, r)
+	return
 }
 
 func (m *EndpointFailure) Parse(c codec.Decoder, r io.Reader) {
@@ -191,13 +224,7 @@ func (m *EndpointFailure) Parse(c codec.Decoder, r io.Reader) {
 
 	}
 
-	causeService := c.String(r)
-	causeMessage := c.String(r)
-
-	m.err = &causeError{
-		service: causeService,
-		msg:     causeMessage,
-	}
+	m.err = tryParseCauseError(c, r)
 }
 
 func (m *EndpointFailure) String() string {
