@@ -43,7 +43,7 @@ func (c *Client) Version() string {
 }
 
 func (c *Client) Close() error {
-	panic("implement me")
+	return c.base.Close()
 }
 
 func NewClient(addr string, opts ...Option) *Client {
