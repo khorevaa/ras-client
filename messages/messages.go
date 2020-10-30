@@ -141,13 +141,13 @@ func (m *OpenEndpointMessageAck) Type() byte {
 }
 
 type EndpointFailure struct {
-	ServiceID  string
-	Version    string
-	EndpointID int
-	Trace      string
-	Cause      *CauseError
-	ClassCause string
-	Message    string
+	ServiceID  string      `json:"service_id"`
+	Version    string      `json:"version"`
+	EndpointID int         `json:"endpoint_id"`
+	ClassCause string      `json:"class_cause"`
+	Message    string      `json:"message"`
+	Trace      []string    `json:"trace"`
+	Cause      *CauseError `json:"cause"`
 }
 
 type CloseEndpointMessage struct {
@@ -165,15 +165,15 @@ func (m *CloseEndpointMessage) Format(c codec.Encoder, w io.Writer) {
 }
 
 type CauseError struct {
-	Service string
-	Message string
-	Err     *CauseError
+	Service string      `json:"service"`
+	Message string      `json:"message"`
+	Cause   *CauseError `json:"cause"`
 }
 
 func (e *CauseError) Error() string {
 
-	if e.Err != nil {
-		return fmt.Sprintf("service-err: %s msg-err: %s %s", e.Service, e.Message, e.Err.Error())
+	if e.Cause != nil {
+		return fmt.Sprintf("service-err: %s msg-err: %s %s", e.Service, e.Message, e.Cause.Error())
 	}
 
 	return fmt.Sprintf("service-err: %s msg-err: %s", e.Service, e.Message)
@@ -192,7 +192,7 @@ func (m *CauseError) Parse(c codec.Decoder, r io.Reader) {
 
 	}
 
-	m.Err = tryParseCauseError(c, r)
+	m.Cause = tryParseCauseError(c, r)
 
 }
 
