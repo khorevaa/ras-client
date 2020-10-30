@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"fmt"
 	"github.com/k0kubun/pp"
 	"github.com/khorevaa/ras-client/protocol/codec"
 	"io"
@@ -145,6 +146,8 @@ type EndpointFailure struct {
 	EndpointID int
 	trace      string
 	err        error
+	classError string
+	errMessage string
 }
 
 type CloseEndpointMessage struct {
@@ -168,7 +171,7 @@ type causeError struct {
 
 func (e *causeError) Error() string {
 
-	return pp.Sprintf("service: %s Err: %s", e.service, e.msg)
+	return fmt.Sprintf("service-err: %s msg-err: %s", e.service, e.msg)
 
 }
 
@@ -178,15 +181,9 @@ func (m *EndpointFailure) Parse(c codec.Decoder, r io.Reader) {
 	c.StringPtr(&m.Version, r)
 
 	m.EndpointID = c.EndpointId(r)
-
-	classError := c.String(r)
-
-	_, _ = pp.Printf(classError)
-
-	errMessage := c.String(r)
+	m.classError = c.String(r)
+	m.errMessage = c.String(r)
 	errSize := c.Size(r)
-
-	_, _ = pp.Printf(errMessage, errSize)
 
 	if errSize > 0 {
 
@@ -213,5 +210,6 @@ func (m *EndpointFailure) Type() byte {
 
 func (m *EndpointFailure) Error() string {
 
-	return m.err.Error()
+	return fmt.Sprintf("service-id: %s class:%s message: %s %s",
+		m.ServiceID, m.classError, m.errMessage, m.err.Error())
 }
