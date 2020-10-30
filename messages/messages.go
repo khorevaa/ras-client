@@ -144,10 +144,10 @@ type EndpointFailure struct {
 	ServiceID  string
 	Version    string
 	EndpointID int
-	trace      string
-	err        error
-	classError string
-	errMessage string
+	Trace      string
+	Cause      *CauseError
+	ClassCause string
+	Message    string
 }
 
 type CloseEndpointMessage struct {
@@ -164,26 +164,26 @@ func (m *CloseEndpointMessage) Format(c codec.Encoder, w io.Writer) {
 
 }
 
-type causeError struct {
-	service string
-	msg     string
-	err     *causeError
+type CauseError struct {
+	Service string
+	Message string
+	Err     *CauseError
 }
 
-func (e *causeError) Error() string {
+func (e *CauseError) Error() string {
 
-	if e.err != nil {
-		return fmt.Sprintf("service-err: %s msg-err: %s %s", e.service, e.msg, e.err.Error())
+	if e.Err != nil {
+		return fmt.Sprintf("service-err: %s msg-err: %s %s", e.Service, e.Message, e.Err.Error())
 	}
 
-	return fmt.Sprintf("service-err: %s msg-err: %s", e.service, e.msg)
+	return fmt.Sprintf("service-err: %s msg-err: %s", e.Service, e.Message)
 
 }
 
-func (m *causeError) Parse(c codec.Decoder, r io.Reader) {
+func (m *CauseError) Parse(c codec.Decoder, r io.Reader) {
 
-	m.service = c.String(r)
-	m.msg = c.String(r)
+	m.Service = c.String(r)
+	m.Message = c.String(r)
 	errSize := c.Size(r)
 
 	if errSize > 0 {
@@ -192,18 +192,18 @@ func (m *causeError) Parse(c codec.Decoder, r io.Reader) {
 
 	}
 
-	m.err = tryParseCauseError(c, r)
+	m.Err = tryParseCauseError(c, r)
 
 }
 
-func tryParseCauseError(c codec.Decoder, r io.Reader) (err *causeError) {
+func tryParseCauseError(c codec.Decoder, r io.Reader) (err *CauseError) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = nil
 		}
 	}()
 
-	err = &causeError{}
+	err = &CauseError{}
 	err.Parse(c, r)
 	return
 }
@@ -214,8 +214,8 @@ func (m *EndpointFailure) Parse(c codec.Decoder, r io.Reader) {
 	c.StringPtr(&m.Version, r)
 
 	m.EndpointID = c.EndpointId(r)
-	m.classError = c.String(r)
-	m.errMessage = c.String(r)
+	m.ClassCause = c.String(r)
+	m.Message = c.String(r)
 	errSize := c.Size(r)
 
 	if errSize > 0 {
@@ -224,11 +224,11 @@ func (m *EndpointFailure) Parse(c codec.Decoder, r io.Reader) {
 
 	}
 
-	m.err = tryParseCauseError(c, r)
+	m.Cause = tryParseCauseError(c, r)
 }
 
 func (m *EndpointFailure) String() string {
-	return m.err.Error()
+	return m.Cause.Error()
 }
 
 func (m *EndpointFailure) Type() byte {
@@ -238,5 +238,5 @@ func (m *EndpointFailure) Type() byte {
 func (m *EndpointFailure) Error() string {
 
 	return fmt.Sprintf("service-id: %s class:%s message: %s %s",
-		m.ServiceID, m.classError, m.errMessage, m.err.Error())
+		m.ServiceID, m.ClassCause, m.Message, m.Cause.Error())
 }
