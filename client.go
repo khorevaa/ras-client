@@ -132,7 +132,7 @@ func (c *Client) openEndpoint(ctx context.Context, conn *pool.Conn) (info pool.E
 			return nil, err
 		}
 		supportedVersion := detectSupportedVersion(message)
-		if len(supportedVersion) > 0 {
+		if len(supportedVersion) == 0 {
 			return nil, err
 		}
 
