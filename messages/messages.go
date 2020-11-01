@@ -143,11 +143,11 @@ func (m *OpenEndpointMessageAck) Type() byte {
 type EndpointFailure struct {
 	ServiceID  string      `json:"service_id"`
 	Version    string      `json:"version"`
-	EndpointID int         `json:"endpoint_id"`
-	ClassCause string      `json:"class_cause"`
+	EndpointID int         `json:"endpoint_id,omitempty"`
+	ClassCause string      `json:"class_cause,omitempty"`
 	Message    string      `json:"message"`
-	Trace      []string    `json:"trace"`
-	Cause      *CauseError `json:"cause"`
+	Trace      []string    `json:"trace,omitempty"`
+	Cause      *CauseError `json:"cause,omitempty"`
 }
 
 type CloseEndpointMessage struct {
@@ -167,7 +167,7 @@ func (m *CloseEndpointMessage) Format(c codec.Encoder, w io.Writer) {
 type CauseError struct {
 	Service string      `json:"service"`
 	Message string      `json:"message"`
-	Cause   *CauseError `json:"cause"`
+	Cause   *CauseError `json:"cause,omitempty"`
 }
 
 func (e *CauseError) Error() string {
