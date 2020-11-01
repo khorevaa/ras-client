@@ -740,6 +740,11 @@ func (p *endpointPool) reapStaleConn() *Conn {
 }
 
 func (p *endpointPool) isStaleConn(cn *Conn) bool {
+
+	if cn.closed() {
+		return true
+	}
+
 	if p.opt.IdleTimeout == 0 && p.opt.MaxConnAge == 0 {
 		return false
 	}
@@ -749,10 +754,6 @@ func (p *endpointPool) isStaleConn(cn *Conn) bool {
 		return true
 	}
 	if p.opt.MaxConnAge > 0 && now.Sub(cn.createdAt) >= p.opt.MaxConnAge {
-		return true
-	}
-
-	if cn.closed() {
 		return true
 	}
 
