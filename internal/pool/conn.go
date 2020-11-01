@@ -19,6 +19,7 @@ type Conn struct {
 	connMU *sync.Mutex
 
 	_locked uint32
+	_closed uint32
 	netConn net.Conn
 	onError func(err IOError)
 
@@ -73,7 +74,25 @@ func (c *Conn) SetNetConn(netConn net.Conn) {
 	c.netConn = netConn
 }
 
+func (c *Conn) closed() bool {
+
+	if atomic.LoadUint32(&c._closed) == 1 {
+		return true
+	}
+
+	_, err := c.netConn.Read(make([]byte, 0))
+	if err != io.EOF {
+		atomic.StoreUint32(&c._closed, 1)
+		return true
+	}
+	return false
+}
+
 func (c *Conn) Close() error {
+
+	if !atomic.CompareAndSwapUint32(&c._closed, 0, 1) {
+		return nil
+	}
 
 	if c.closer != nil {
 
