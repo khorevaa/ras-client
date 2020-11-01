@@ -6,6 +6,7 @@ import (
 	"github.com/khorevaa/ras-client/messages"
 	"github.com/khorevaa/ras-client/serialize/esig"
 	uuid "github.com/satori/go.uuid"
+	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -749,6 +750,11 @@ func (p *endpointPool) isStaleConn(cn *Conn) bool {
 		return true
 	}
 	if p.opt.MaxConnAge > 0 && now.Sub(cn.createdAt) >= p.opt.MaxConnAge {
+		return true
+	}
+
+	_, err := cn.netConn.Read(make([]byte, 0))
+	if err != io.EOF {
 		return true
 	}
 
