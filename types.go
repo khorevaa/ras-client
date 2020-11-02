@@ -33,6 +33,8 @@ type adminApi interface {
 }
 
 type clusterApi interface {
+	RegCluster(ctx context.Context, info serialize.ClusterInfo) (uuid.UUID, error)
+	UnregCluster(ctx context.Context, clusterId uuid.UUID) error
 	GetClusters(ctx context.Context) ([]*serialize.ClusterInfo, error)
 	GetClusterInfo(ctx context.Context, cluster uuid.UUID) (serialize.ClusterInfo, error)
 	GetClusterInfobases(ctx context.Context, id uuid.UUID) (serialize.InfobaseSummaryList, error)
