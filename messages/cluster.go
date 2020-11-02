@@ -151,3 +151,86 @@ func (r *UnregClusterRequest) Format(encoder codec.Encoder, _ int, w io.Writer) 
 func (_ *UnregClusterRequest) Type() EndpointMessageType {
 	return UNREG_CLUSTER_REQUEST
 }
+
+// GetClusterAdminsRequest получение списка админов кластера
+//
+//  type GET_CLUSTER_ADMINS_REQUEST
+//  respond GetClusterAdminsResponse
+type GetClusterAdminsRequest struct {
+	ClusterID uuid.UUID
+}
+
+func (r *GetClusterAdminsRequest) Sig() esig.ESIG {
+	return esig.FromUuid(r.ClusterID)
+}
+
+func (r *GetClusterAdminsRequest) Format(e codec.Encoder, _ int, w io.Writer) {
+	e.Uuid(r.ClusterID, w)
+}
+
+func (_ *GetClusterAdminsRequest) Type() EndpointMessageType {
+	return GET_CLUSTER_ADMINS_REQUEST
+}
+
+// GetAgentAdminsResponse ответ со списком админов агента кластера
+//
+//  type GET_CLUSTER_ADMINS_RESPONSE
+//  Users serialize.UsersList
+type GetClusterAdminsResponse struct {
+	Users serialize.UsersList
+}
+
+func (res *GetClusterAdminsResponse) Parse(decoder codec.Decoder, version int, r io.Reader) {
+
+	list := serialize.UsersList{}
+	list.Parse(decoder, version, r)
+
+	res.Users = list
+
+}
+
+func (_ *GetClusterAdminsResponse) Type() EndpointMessageType {
+	return GET_CLUSTER_ADMINS_RESPONSE
+}
+
+// RegClusterAdminRequest регистрация админа кластера
+//
+//  type REG_CLUSTER_ADMIN_REQUEST
+type RegClusterAdminRequest struct {
+	ClusterID uuid.UUID
+	User      serialize.UserInfo
+}
+
+func (r *RegClusterAdminRequest) Sig() esig.ESIG {
+	return esig.Nil
+}
+
+func (r *RegClusterAdminRequest) Format(e codec.Encoder, v int, w io.Writer) {
+	e.Uuid(r.ClusterID, w)
+	r.User.Format(e, v, w)
+}
+
+func (_ *RegClusterAdminRequest) Type() EndpointMessageType {
+	return REG_CLUSTER_ADMIN_REQUEST
+}
+
+// UnregClusterAdminRequest удаление админа кластера
+//
+//  type REG_AGENT_ADMIN_REQUEST
+type UnregClusterAdminRequest struct {
+	ClusterID uuid.UUID
+	User      string
+}
+
+func (r *UnregClusterAdminRequest) Sig() esig.ESIG {
+	return esig.Nil
+}
+
+func (r *UnregClusterAdminRequest) Format(e codec.Encoder, v int, w io.Writer) {
+	e.Uuid(r.ClusterID, w)
+	e.String(r.User, w)
+}
+
+func (_ *UnregClusterAdminRequest) Type() EndpointMessageType {
+	return UNREG_CLUSTER_ADMIN_REQUEST
+}

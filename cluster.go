@@ -121,3 +121,50 @@ func (c *Client) GetClusterInfobases(ctx context.Context, id uuid.UUID) (seriali
 
 	return response.Infobases, err
 }
+
+func (c *Client) GetClusterAdmins(ctx context.Context, clusterID uuid.UUID) (serialize.UsersList, error) {
+
+	req := &messages.GetClusterAdminsRequest{
+		ClusterID: clusterID,
+	}
+
+	resp, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	response := resp.(*messages.GetClusterAdminsResponse)
+
+	return response.Users, err
+}
+
+func (c *Client) RegClusterAdmin(ctx context.Context, clusterID uuid.UUID, user serialize.UserInfo) error {
+
+	req := &messages.RegClusterAdminRequest{
+		ClusterID: clusterID,
+		User:      user,
+	}
+
+	_, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) UnregClusterAdmin(ctx context.Context, clusterID uuid.UUID, user string) error {
+
+	req := &messages.UnregClusterAdminRequest{
+		ClusterID: clusterID,
+		User:      user,
+	}
+
+	_, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
