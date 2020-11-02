@@ -394,11 +394,20 @@ func (p *endpointPool) openEndpoint(ctx context.Context, conn *Conn) (*Endpoint,
 	return endpoint, nil
 }
 
+func needAgentAuth(req messages.EndpointRequestMessage) bool {
+	switch req.(type) {
+	case *messages.GetAgentAdminsRequest, *messages.RegAgentAdminRequest, *messages.UnregAgentAdminRequest,
+		*messages.RegClusterRequest, *messages.UnregClusterRequest:
+		return true
+	}
+
+	return false
+}
+
 // Get returns existed connection from the pool or creates a new one.
 func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req messages.EndpointRequestMessage) error {
 
-	switch req.(type) {
-	case *messages.GetAgentAdminsRequest, *messages.RegAgentAdminRequest, *messages.UnregAgentAdminRequest:
+	if needAgentAuth(req) {
 		err := p.setAgentAuth(ctx, endpoint)
 
 		if err != nil {
