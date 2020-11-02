@@ -473,6 +473,10 @@ func (p *endpointPool) updateClusterAuth(ctx context.Context, endpoint *Endpoint
 
 func (p *endpointPool) setAgentAuth(ctx context.Context, endpoint *Endpoint) error {
 
+	if len(p.authAgent.user) == 0 {
+		return nil
+	}
+
 	authMessage := endpoint.newEndpointMessage(messages.AuthenticateAgentRequest{
 		User:     p.authAgent.user,
 		Password: p.authAgent.password,
