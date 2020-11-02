@@ -206,6 +206,14 @@ func (t EndpointMessageType) Parser() interface{} {
 		return &GetWorkingServerInfoResponse{}
 	case REG_WORKING_SERVER_RESPONSE:
 		return &RegWorkingServerResponse{}
+	case REG_CLUSTER_RESPONSE:
+		return &RegClusterResponse{}
+	case GET_AGENT_ADMINS_RESPONSE:
+		return &GetAgentAdminsResponse{}
+	case GET_CLUSTER_ADMINS_RESPONSE:
+		return &GetClusterAdminsResponse{}
+	case GET_AGENT_VERSION_RESPONSE:
+		return &GetAgentVersionResponse{}
 	default:
 		panic("unknown typed parser id: " + string(t))
 	}

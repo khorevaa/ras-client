@@ -2,6 +2,7 @@ package serialize
 
 import (
 	"context"
+	"github.com/khorevaa/ras-client/protocol/codec"
 	uuid "github.com/satori/go.uuid"
 	"io"
 )
@@ -48,4 +49,25 @@ func (i *ClusterInfo) Parse(decoder Decoder, version int, r io.Reader) {
 		decoder.BoolPtr(&i.KillByMemoryWithDump, r)
 	}
 
+}
+
+func (i *ClusterInfo) Format(encoder codec.Encoder, version int, w io.Writer) {
+
+	encoder.Uuid(i.UUID, w)
+	encoder.Int(i.ExpirationTimeout, w) // expirationTimeout
+	encoder.String(i.Host, w)
+	encoder.Int(i.LifeTimeLimit, w)
+	encoder.Short(i.Port, w)
+	encoder.Int(i.MaxMemorySize, w)
+	encoder.Int(i.MaxMemoryTimeLimit, w)
+	encoder.String(i.Name, w)
+	encoder.Int(i.SecurityLevel, w)
+	encoder.Int(i.SessionFaultToleranceLevel, w)
+	encoder.Int(i.LoadBalancingMode, w)
+	encoder.Int(i.ErrorsCountThreshold, w)
+	encoder.Bool(i.KillProblemProcesses, w)
+
+	if version > 8 {
+		encoder.Bool(i.KillByMemoryWithDump, w)
+	}
 }

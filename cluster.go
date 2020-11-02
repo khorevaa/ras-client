@@ -24,6 +24,38 @@ func (c *Client) GetClusters(ctx context.Context) ([]*serialize.ClusterInfo, err
 	return response.Clusters, err
 }
 
+func (c *Client) RegCluster(ctx context.Context, info serialize.ClusterInfo) (uuid.UUID, error) {
+
+	req := &messages.RegClusterRequest{
+		Info: info,
+	}
+
+	resp, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	response := resp.(*messages.RegClusterResponse)
+
+	return response.ClusterID, err
+}
+
+func (c *Client) UnregCluster(ctx context.Context, clusterId uuid.UUID) error {
+
+	req := &messages.UnregClusterRequest{
+		ClusterID: clusterId,
+	}
+
+	_, err := c.sendEndpointRequest(ctx, req)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (c *Client) GetClusterInfo(ctx context.Context, cluster uuid.UUID) (serialize.ClusterInfo, error) {
 
 	req := &messages.GetClusterInfoRequest{ClusterID: cluster}
