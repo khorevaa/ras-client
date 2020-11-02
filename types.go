@@ -11,7 +11,7 @@ type Api interface {
 
 	Close() error
 
-	adminApi
+	agentApi
 	authApi
 	clusterApi
 	sessionApi
@@ -28,8 +28,11 @@ type authApi interface {
 	AuthenticateInfobase(cluster uuid.UUID, user, password string)
 }
 
-type adminApi interface {
+type agentApi interface {
 	GetAgentVersion(ctx context.Context) (string, error)
+	GetAgentAdmins(ctx context.Context) (serialize.UsersList, error)
+	RegAgentAdmin(ctx context.Context, user serialize.UserInfo) error
+	UnregAgentAdmin(ctx context.Context, user string) error
 }
 
 type clusterApi interface {
