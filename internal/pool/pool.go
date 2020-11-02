@@ -391,17 +391,20 @@ func (p *endpointPool) openEndpoint(ctx context.Context, conn *Conn) (*Endpoint,
 	endpoint.conn = conn
 	conn.endpoints = append(conn.endpoints, endpoint)
 
-	err = p.setAgentAuth(ctx, endpoint)
-
-	if err != nil {
-		return nil, err
-	}
-
 	return endpoint, nil
 }
 
 // Get returns existed connection from the pool or creates a new one.
 func (p *endpointPool) onRequest(ctx context.Context, endpoint *Endpoint, req messages.EndpointRequestMessage) error {
+
+	switch req.(type) {
+	case *messages.GetAgentAdminsRequest, *messages.RegAgentAdminRequest, *messages.UnregAgentAdminRequest:
+		err := p.setAgentAuth(ctx, endpoint)
+
+		if err != nil {
+			return err
+		}
+	}
 
 	sig := req.Sig()
 
@@ -472,10 +475,6 @@ func (p *endpointPool) updateClusterAuth(ctx context.Context, endpoint *Endpoint
 }
 
 func (p *endpointPool) setAgentAuth(ctx context.Context, endpoint *Endpoint) error {
-
-	if len(p.authAgent.user) == 0 {
-		return nil
-	}
 
 	authMessage := endpoint.newEndpointMessage(messages.AuthenticateAgentRequest{
 		User:     p.authAgent.user,
