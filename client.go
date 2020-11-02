@@ -222,10 +222,7 @@ func (c *Client) tryOpenEndpoint(ctx context.Context, conn *pool.Conn) (*message
 
 func (c *Client) closeEndpoint(_ context.Context, conn *pool.Conn, endpoint *pool.Endpoint) error {
 
-	_, _ = pp.Println("close endpoint", endpoint.ID())
 	err := c.sendRequestMessage(conn, &messages.CloseEndpointMessage{EndpointID: endpoint.ID()})
-
-	//_, err = conn.GetPacket(ctx)
 
 	if err != nil {
 		return err
