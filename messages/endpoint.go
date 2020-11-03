@@ -33,7 +33,7 @@ func (m *EndpointMessageFailure) Parse(c codec.Decoder, r io.Reader) {
 	c.StringPtr(&m.ServiceID, r)
 	c.StringPtr(&m.Message, r)
 
-	msg := strings.Split(m.Message, "#")
+	msg := strings.Split(m.ServiceID, "#")
 
 	if len(msg) == 2 {
 		m.ServiceID = msg[0]
