@@ -196,7 +196,7 @@ func (e *Endpoint) tryParseMessage(packet *Packet) (message *messages.EndpointMe
 
 		decoder := e.codec.Decoder()
 
-		err := &messages.EndpointMessageFailure{}
+		err := &messages.EndpointFailure{}
 		err.Parse(decoder, packet)
 
 		return nil, err

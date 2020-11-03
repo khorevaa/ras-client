@@ -21,32 +21,16 @@ func (e EndpointMessageKind) Type() byte {
 }
 
 type EndpointMessageFailure struct {
-	ServiceID  string      `json:"service_id"`
-	Version    string      `json:"version"`
-	EndpointID int         `json:"endpoint_id,omitempty"`
-	ClassCause string      `json:"class_cause,omitempty"`
-	Message    string      `json:"message"`
-	Trace      []string    `json:"trace,omitempty"`
-	Cause      *CauseError `json:"cause,omitempty"`
+	ServiceID  string `json:"service_id"`
+	EndpointID int    `json:"endpoint_id,omitempty"`
+	Message    string `json:"message"`
 }
 
 func (m *EndpointMessageFailure) Parse(c codec.Decoder, r io.Reader) {
 
 	c.StringPtr(&m.ServiceID, r)
-	c.StringPtr(&m.Version, r)
+	c.StringPtr(&m.Message, r)
 
-	m.EndpointID = c.EndpointId(r)
-	m.ClassCause = c.String(r)
-	m.Message = c.String(r)
-	errSize := c.Size(r)
-
-	if errSize > 0 {
-
-		panic("TODO ")
-
-	}
-
-	m.Cause = tryParseCauseError(c, r)
 }
 
 func (m *EndpointMessageFailure) String() string {
@@ -59,9 +43,6 @@ func (m *EndpointMessageFailure) Type() EndpointMessageKind {
 
 func (m *EndpointMessageFailure) Error() string {
 
-	if m.Cause != nil {
-		fmt.Sprintf("endpoint: %d service: %s msg: %s cause:%s", m.EndpointID, m.ServiceID, m.Message, m.Cause.Error())
-	}
 	return fmt.Sprintf("endpoint: %d service: %s msg: %s", m.EndpointID, m.ServiceID, m.Message)
 }
 
