@@ -90,7 +90,6 @@ var _ EndpointRequestMessage = (*GetInfobaseConnectionsShortRequest)(nil)
 type GetInfobaseConnectionsShortRequest struct {
 	ClusterID  uuid.UUID
 	InfobaseID uuid.UUID
-	response   *GetInfobaseConnectionsShortResponse
 }
 
 func (r *GetInfobaseConnectionsShortRequest) Sig() esig.ESIG {
@@ -104,10 +103,6 @@ func (_ *GetInfobaseConnectionsShortRequest) Type() EndpointMessageType {
 func (r *GetInfobaseConnectionsShortRequest) Format(encoder codec.Encoder, _ int, w io.Writer) {
 	encoder.Uuid(r.ClusterID, w)
 	encoder.Uuid(r.InfobaseID, w)
-}
-
-func (r *GetInfobaseConnectionsShortRequest) Response() *GetInfobaseConnectionsShortResponse {
-	return r.response
 }
 
 // GetConnectionsShortResponse ответ со списком соединений кластера
