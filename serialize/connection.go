@@ -129,7 +129,7 @@ func (l ConnectionShortInfoList) filter(fn func(info *ConnectionShortInfo) bool,
 
 	for _, info := range l {
 
-		if n == count {
+		if n == count && count > 0 {
 			break
 		}
 

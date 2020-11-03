@@ -121,7 +121,7 @@ func (l InfobaseSummaryList) filter(fn func(info *InfobaseSummaryInfo) bool, cou
 
 	for _, info := range l {
 
-		if n == count {
+		if n == count && count > 0 {
 			break
 		}
 

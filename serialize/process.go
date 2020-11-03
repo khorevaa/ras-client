@@ -30,7 +30,7 @@ func (l ProcessInfoList) filter(fn func(info *ProcessInfo) bool, count int) (val
 
 	for _, info := range l {
 
-		if n == count {
+		if n == count && count > 0 {
 			break
 		}
 
