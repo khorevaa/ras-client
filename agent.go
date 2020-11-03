@@ -10,6 +10,19 @@ var _ agentApi = (*Client)(nil)
 
 func (c *Client) GetAgentVersion(ctx context.Context) (string, error) {
 
+	switch c.serviceVersion {
+	case "4.0":
+		return "8.3.11", nil
+	case "5.0":
+		return "8.3.12", nil
+	case "6.0":
+		return "8.3.13", nil
+	case "7.0":
+		return "8.3.14", nil
+	case "8.0":
+		return "8.3.15", nil
+	}
+
 	req := &messages.GetAgentVersionRequest{}
 
 	resp, err := c.sendEndpointRequest(ctx, req)
