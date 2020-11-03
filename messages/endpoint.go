@@ -5,6 +5,7 @@ import (
 	"github.com/k0kubun/pp"
 	"github.com/khorevaa/ras-client/protocol/codec"
 	"io"
+	"strings"
 )
 
 //goland:noinspection ALL
@@ -22,6 +23,7 @@ func (e EndpointMessageKind) Type() byte {
 
 type EndpointMessageFailure struct {
 	ServiceID  string `json:"service_id"`
+	ErrorType  string `json:"type"`
 	EndpointID int    `json:"endpoint_id,omitempty"`
 	Message    string `json:"message"`
 }
@@ -30,6 +32,13 @@ func (m *EndpointMessageFailure) Parse(c codec.Decoder, r io.Reader) {
 
 	c.StringPtr(&m.ServiceID, r)
 	c.StringPtr(&m.Message, r)
+
+	msg := strings.Split(m.Message, "#")
+
+	if len(msg) == 2 {
+		m.ServiceID = msg[0]
+		m.ErrorType = msg[1]
+	}
 
 }
 
