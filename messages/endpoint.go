@@ -22,17 +22,23 @@ func (e EndpointMessageKind) Type() byte {
 
 type EndpointMessageFailure struct {
 	ServiceID  string      `json:"service_id"`
+	Version    string      `json:"version"`
+	EndpointID int         `json:"endpoint_id,omitempty"`
+	ClassCause string      `json:"class_cause,omitempty"`
 	Message    string      `json:"message"`
-	EndpointID int         `json:"endpoint_id"`
 	Trace      []string    `json:"trace,omitempty"`
 	Cause      *CauseError `json:"cause,omitempty"`
 }
 
-func (m *EndpointMessageFailure) Parse(decoder codec.Decoder, r io.Reader) {
+func (m *EndpointMessageFailure) Parse(c codec.Decoder, r io.Reader) {
 
-	decoder.StringPtr(&m.ServiceID, r)
-	decoder.StringPtr(&m.Message, r)
-	errSize := decoder.Size(r)
+	c.StringPtr(&m.ServiceID, r)
+	c.StringPtr(&m.Version, r)
+
+	m.EndpointID = c.EndpointId(r)
+	m.ClassCause = c.String(r)
+	m.Message = c.String(r)
+	errSize := c.Size(r)
 
 	if errSize > 0 {
 
@@ -40,7 +46,7 @@ func (m *EndpointMessageFailure) Parse(decoder codec.Decoder, r io.Reader) {
 
 	}
 
-	m.Cause = tryParseCauseError(decoder, r)
+	m.Cause = tryParseCauseError(c, r)
 }
 
 func (m *EndpointMessageFailure) String() string {
