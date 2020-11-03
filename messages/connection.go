@@ -58,16 +58,16 @@ var _ EndpointRequestMessage = (*DisconnectConnectionRequest)(nil)
 // DisconnectConnectionRequest отключение соединения
 //
 //  type DISCONNECT_REQUEST = 59
-//  kind MESSAGE_KIND = 1
 //  respond nothing
 type DisconnectConnectionRequest struct {
 	ClusterID    uuid.UUID
 	ProcessID    uuid.UUID
+	InfobaseID   uuid.UUID
 	ConnectionID uuid.UUID
 }
 
 func (r *DisconnectConnectionRequest) Sig() esig.ESIG {
-	return esig.FromUuid(r.ClusterID)
+	return esig.From2Uuid(r.ClusterID, r.InfobaseID)
 }
 
 func (_ *DisconnectConnectionRequest) Type() EndpointMessageType {

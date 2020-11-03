@@ -57,7 +57,7 @@ type sessionApi interface {
 type connectionsApi interface {
 	GetClusterConnections(ctx context.Context, uuid uuid.UUID) (serialize.ConnectionShortInfoList, error)
 	GetInfobaseConnections(ctx context.Context, cluster uuid.UUID, infobase uuid.UUID) (serialize.ConnectionShortInfoList, error)
-	DisconnectConnection(ctx context.Context, cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) error
+	DisconnectConnection(ctx context.Context, cluster uuid.UUID, process uuid.UUID, connection uuid.UUID, infobase uuid.UUID) error
 }
 
 type locksApi interface {

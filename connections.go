@@ -26,12 +26,13 @@ func (c *Client) GetClusterConnections(ctx context.Context, id uuid.UUID) (seria
 	return response.Connections, err
 }
 
-func (c *Client) DisconnectConnection(ctx context.Context, cluster uuid.UUID, process uuid.UUID, connection uuid.UUID) error {
+func (c *Client) DisconnectConnection(ctx context.Context, cluster uuid.UUID, process uuid.UUID, connection uuid.UUID, infobase uuid.UUID) error {
 
 	req := &messages.DisconnectConnectionRequest{
 		ClusterID:    cluster,
 		ProcessID:    process,
 		ConnectionID: connection,
+		InfobaseID:   infobase,
 	}
 
 	_, err := c.sendEndpointRequest(ctx, req)
