@@ -129,6 +129,19 @@ type EndpointPool interface {
 	GetInfobaseAuth(id uuid.UUID) (user, password string)
 }
 
+type Pooler interface {
+	NewConn(context.Context) (*Conn, error)
+	CloseConn(*Conn) error
+
+	Get(context.Context) (*Conn, error)
+	Put(context.Context, *Conn)
+	Remove(context.Context, *Conn, error)
+
+	Len() int
+	IdleLen() int
+	Close() error
+}
+
 type endpointPool struct {
 	opt *Options
 

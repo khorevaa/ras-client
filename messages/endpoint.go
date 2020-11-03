@@ -21,9 +21,9 @@ func (e EndpointMessageKind) Type() byte {
 }
 
 type EndpointMessageFailure struct {
-	ServiceID  string
-	Message    string
-	EndpointID int
+	ServiceID  string `json:"service_id"`
+	Message    string `json:"message"`
+	EndpointID int    `json:"endpoint_id"`
 }
 
 func (m *EndpointMessageFailure) Parse(decoder codec.Decoder, r io.Reader) {
