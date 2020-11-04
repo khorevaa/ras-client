@@ -84,6 +84,10 @@ func (c *Conn) closed() bool {
 	var zero time.Time
 	_ = c.netConn.SetReadDeadline(zero)
 
+	if err == nil {
+		return false
+	}
+
 	netErr, _ := err.(net.Error)
 	if err != io.EOF && !netErr.Timeout() {
 		atomic.StoreUint32(&c._closed, 1)
